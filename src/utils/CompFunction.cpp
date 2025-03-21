@@ -432,6 +432,7 @@ template class CompFunction<3>;
 template <int D> void deep_copy(CompFunction<D> *out, const CompFunction<D> &inp) {
     out->func_ptr->data = inp.func_ptr->data;
     out->alloc(inp.Ncomp());
+    if (inp.getNNodes() == 0) return;
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (inp.isreal()) {
             inp.CompD[i]->deep_copy(out->CompD[i]);
@@ -448,6 +449,7 @@ template <int D> void deep_copy(CompFunction<D> *out, const CompFunction<D> &inp
 template <int D> void deep_copy(CompFunction<D> &out, const CompFunction<D> &inp) {
     out.func_ptr->data = inp.func_ptr->data;
     out.alloc(inp.Ncomp());
+    if (inp.getNNodes() == 0) return;
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (inp.isreal()) {
             inp.CompD[i]->deep_copy(out.CompD[i]);
@@ -564,6 +566,10 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
     out.func_ptr->data = inp_a.func_ptr->data;
     out.func_ptr->data.shared = share; // we don't inherit the shareness
     out.func_ptr->conj = false;        // we don't inherit conjugaison
+    if (inp_a.getNNodes() == 0 or inp_b.getNNodes() == 0) {
+        if (!out_allocated) out.alloc(out.Ncomp());
+        return;
+    }
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
         out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] * inp_b.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
         if (inp_a.isreal() and inp_b.isreal()) {
@@ -701,7 +707,7 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDoub
 /** @brief Compute <bra|ket> = int bra^\dag(r) * ket(r) dr.
  *
  *  Sum of component dots.
- *  Notice that the <bra| position is already complex conjugated.
+ *  Notice that the <bra| position is complex conjugated in the tree multiplication.
  *
  */
 template <int D> ComplexDouble dot(CompFunction<D> bra, CompFunction<D> ket) {
@@ -719,14 +725,10 @@ template <int D> ComplexDouble dot(CompFunction<D> bra, CompFunction<D> ket) {
         } else {
             dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompC[comp]);
         }
-        dotprod *= bra.func_ptr->data.c1[comp] * ket.func_ptr->data.c1[comp];
+        dotprod *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
         dotprodtot += dotprod;
     }
-    if (bra.isreal() and ket.isreal()) {
-        return dotprodtot.real();
-    } else {
-        return dotprodtot;
-    }
+    return dotprodtot;
 }
 
 /** @brief Compute  <bra|ket> = int |bra^\dag(r)| * |ket(r)| dr.
@@ -776,6 +778,7 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, dou
     out.func_ptr->isreal = 1;
     out.func_ptr->iscomplex = 0;
     if (out.Ncomp() < 1) out.alloc(1);
+    if (need_to_project) build_grid(*out.CompD[0], f);
     if (need_to_project) mrcpp::project<D, double>(prec, *out.CompD[0], f);
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
@@ -784,6 +787,7 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, Com
     out.func_ptr->isreal = 0;
     out.func_ptr->iscomplex = 1;
     if (out.Ncomp() < 1) out.alloc(1);
+    if (need_to_project) build_grid(*out.CompC[0], f);
     if (need_to_project) mrcpp::project<D, ComplexDouble>(prec, *out.CompC[0], f);
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
@@ -2548,166 +2552,6 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
         for (int j = 0; j < M; j++) { S(i, j) *= std::conj(FacBra[i]) * FacKet[j]; }
     }
 
-    return S;
-}
-
-/** @brief Compute the overlap matrix of the absolute value of the functions S_ij = <|bra_i|||ket_j|>
- *
- */
-DoubleMatrix calc_norm_overlap_matrix(CompFunctionVector &BraKet) {
-    int N = BraKet.size();
-    DoubleMatrix S = DoubleMatrix::Zero(N, N);
-    DoubleMatrix Sreal = DoubleMatrix::Zero(N, N); // same as S, but stored as 4 blocks, rr,ri,ir,ii
-    MultiResolutionAnalysis<3> *mra = BraKet.vecMRA;
-
-    // 1) make union tree without coefficients
-    mrcpp::FunctionTree<3> refTree(*mra);
-    mrcpp::mpi::allreduce_Tree_noCoeff(refTree, BraKet, mpi::comm_wrk);
-
-    int sizecoeff = (1 << refTree.getDim()) * refTree.getKp1_d();
-    int sizecoeffW = ((1 << refTree.getDim()) - 1) * refTree.getKp1_d();
-
-    // get a list of all nodes in union grid, as defined by their indices
-    std::vector<double> scalefac;
-    std::vector<double *> coeffVec_ref;
-    std::vector<int> indexVec_ref;    // serialIx of the nodes
-    std::vector<int> parindexVec_ref; // serialIx of the parent nodes
-    int max_ix;                       // largest index value (not used here)
-
-    refTree.makeCoeffVector(coeffVec_ref, indexVec_ref, parindexVec_ref, scalefac, max_ix, refTree);
-    int max_n = indexVec_ref.size();
-
-    // only used for serial case:
-    std::vector<std::vector<double *>> coeffVec(N);
-    std::map<int, std::vector<int>> node2orbVec; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2node(N); // for a given orbital and a given node, gives the node index in
-                                                 // the orbital given the node index in the reference tree
-
-    bool serial = mrcpp::mpi::wrk_size == 1; // flag for serial/MPI switch
-    mrcpp::BankAccount nodesBraKet;
-
-    // In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
-    if (serial) {
-        // 2) make list of all coefficients, and their reference indices
-        // for different orbitals, indexVec will give the same index for the same node in space
-        std::vector<int> parindexVec; // serialIx of the parent nodes
-        std::vector<int> indexVec;    // serialIx of the nodes
-        for (int j = 0; j < N; j++) {
-            // make vector with all coef pointers and their indices in the union grid
-            if (BraKet[j].hasReal()) {
-                BraKet[j].real().makeCoeffVector(coeffVec[j], indexVec, parindexVec, scalefac, max_ix, refTree);
-                // make a map that gives j from indexVec
-                int orb_node_ix = 0;
-                for (int ix : indexVec) {
-                    orb2node[j][ix] = orb_node_ix++;
-                    if (ix < 0) continue;
-                    node2orbVec[ix].push_back(j);
-                }
-            }
-            if (BraKet[j].hasImag()) {
-                BraKet[j].imag().makeCoeffVector(coeffVec[j + N], indexVec, parindexVec, scalefac, max_ix, refTree);
-                // make a map that gives j from indexVec
-                int orb_node_ix = 0;
-                for (int ix : indexVec) {
-                    orb2node[j + N][ix] = orb_node_ix++;
-                    if (ix < 0) continue;
-                    node2orbVec[ix].push_back(j + N);
-                }
-            }
-        }
-    } else { // MPI case
-        // 2) send own nodes to bank, identifying them through the serialIx of refTree
-        save_nodes(BraKet, refTree, nodesBraKet);
-        mrcpp::mpi::barrier(mrcpp::mpi::comm_wrk); // wait until everything is stored before fetching!
-    }
-
-    // 3) make dot product for all the nodes and accumulate into S
-
-    int ibank = 0;
-#pragma omp parallel for schedule(dynamic) if (serial)
-    for (int n = 0; n < max_n; n++) {
-        if (n % mrcpp::mpi::wrk_size != mrcpp::mpi::wrk_rank) continue;
-        int csize;
-        int node_ix = indexVec_ref[n]; // SerialIx for this node in the reference tree
-        std::vector<int> orbVec;       // identifies which orbitals use this node
-        if (serial and node2orbVec[node_ix].size() <= 0) continue;
-        if (parindexVec_ref[n] < 0)
-            csize = sizecoeff;
-        else
-            csize = sizecoeffW;
-        // In the serial case we copy the coeff coeffBlock. In the mpi case coeffBlock is provided by the bank
-        if (serial) {
-            int shift = sizecoeff - sizecoeffW; // to copy only wavelet part
-            if (parindexVec_ref[n] < 0) shift = 0;
-            DoubleMatrix coeffBlock(csize, node2orbVec[node_ix].size());
-            for (int j : node2orbVec[node_ix]) { // loop over indices of the orbitals using this node
-                int orb_node_ix = orb2node[j][node_ix];
-                for (int k = 0; k < csize; k++) coeffBlock(k, orbVec.size()) = coeffVec[j][orb_node_ix][k + shift];
-                orbVec.push_back(j);
-            }
-            if (orbVec.size() > 0) {
-                DoubleMatrix S_temp(orbVec.size(), orbVec.size());
-                coeffBlock = coeffBlock.cwiseAbs();
-                S_temp.noalias() = coeffBlock.transpose() * coeffBlock;
-                for (int i = 0; i < orbVec.size(); i++) {
-                    for (int j = 0; j < orbVec.size(); j++) {
-                        if (BraKet[orbVec[i]].func_ptr->data.n1[0] != BraKet[orbVec[j]].func_ptr->data.n1[0] and BraKet[orbVec[i]].func_ptr->data.n1[0] != 0 and
-                            BraKet[orbVec[j]].func_ptr->data.n1[0] != 0)
-                            continue;
-                        double &Srealij = Sreal(orbVec[i], orbVec[j]);
-                        double &Stempij = S_temp(i, j);
-#pragma omp atomic
-                        Srealij += Stempij;
-                    }
-                }
-            }
-        } else { // MPI case
-            DoubleMatrix coeffBlock(csize, N);
-            nodesBraKet.get_nodeblock(indexVec_ref[n], coeffBlock.data(), orbVec);
-
-            if (orbVec.size() > 0) {
-                DoubleMatrix S_temp(orbVec.size(), orbVec.size());
-                coeffBlock.conservativeResize(Eigen::NoChange, orbVec.size());
-                coeffBlock = coeffBlock.cwiseAbs();
-                S_temp.noalias() = coeffBlock.transpose() * coeffBlock;
-                for (int i = 0; i < orbVec.size(); i++) {
-                    for (int j = 0; j < orbVec.size(); j++) {
-                        if (BraKet[orbVec[i]].func_ptr->data.n1[0] != BraKet[orbVec[j]].func_ptr->data.n1[0] and BraKet[orbVec[i]].func_ptr->data.n1[0] != 0 and
-                            BraKet[orbVec[j]].func_ptr->data.n1[0] != 0)
-                            continue;
-                        Sreal(orbVec[i], orbVec[j]) += S_temp(i, j);
-                    }
-                }
-            }
-        }
-    }
-
-    IntVector conjMat = IntVector::Zero(N);
-    for (int i = 0; i < N; i++) {
-        if (!mrcpp::mpi::my_func(i)) continue;
-        conjMat[i] = (BraKet[i].conjugate()) ? -1 : 1;
-    }
-    mrcpp::mpi::allreduce_vector(conjMat, mrcpp::mpi::comm_wrk);
-
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j <= i; j++) {
-            S(i, j) = Sreal(i, j) + conjMat[i] * conjMat[j] * Sreal(i + N, j + N) + conjMat[j] * Sreal(i, j + N) - conjMat[i] * Sreal(i + N, j);
-            S(j, i) = S(i, j);
-        }
-    }
-
-    // Assumes linearity: result is sum of all nodes contributions
-    mrcpp::mpi::allreduce_matrix(S, mrcpp::mpi::comm_wrk);
-    // multiply by CompFunction multiplicative factor
-    ComplexVector Fac = ComplexVector::Zero(N);
-    for (int i = 0; i < N; i++) {
-        if (!mrcpp::mpi::my_func(BraKet[i])) continue;
-        Fac[i] = BraKet[i].func_ptr->data.c1[0];
-    }
-    mrcpp::mpi::allreduce_vector(Fac, mrcpp::mpi::comm_wrk);
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) { S(i, j) *= std::norm(std::conj(Fac[i])) * std::norm(Fac[j]); }
-    }
     return S;
 }
 
