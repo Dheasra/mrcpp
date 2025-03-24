@@ -246,13 +246,13 @@ int main(int argc, char **argv) {
     Nabla_K_tree = mrcpp::gradient(D, K_tree);
 // ==================================================================================================================================
 
-    std::cout << "apply" << '\n';
+    /* std::cout << "apply" << '\n';
     CompFunction<3> One_dir_deriv(mra);
     mrcpp::apply(One_dir_deriv, D, K_tree, 0);
     std::cout << "One_dir_deriv = " << One_dir_deriv.getSquareNorm() << '\n';
 
     std::cout << "Post apply" << '\n';  
-    
+     */
 
     
     // Now we compute the Gradient of Psi_2c as well
@@ -269,13 +269,14 @@ int main(int argc, char **argv) {
     Nabla_Psi_2c.push_back(Nabla_Psi_t);
     Nabla_Psi_2c.push_back(Nabla_Psi_b);
 
+    if (debug){
     std::cout << "Nabla_Psi_t[0] square norm = " << Nabla_Psi_t[0]->getSquareNorm() << '\n';
     std::cout << "Nabla_Psi_t[1] square norm = " << Nabla_Psi_t[1]->getSquareNorm() << '\n';
     std::cout << "Nabla_Psi_t[2] square norm = " << Nabla_Psi_t[2]->getSquareNorm() << '\n';
     std::cout << "Nabla_Psi_b[0] square norm = " << Nabla_Psi_b[0]->getSquareNorm() << '\n';
     std::cout << "Nabla_Psi_b[1] square norm = " << Nabla_Psi_b[1]->getSquareNorm() << '\n';
     std::cout << "Nabla_Psi_b[2] square norm = " << Nabla_Psi_b[2]->getSquareNorm() << '\n';
-
+    }
 
 
     std::cout << "************************************************************" << '\n';
@@ -286,8 +287,14 @@ int main(int argc, char **argv) {
     std::cout << "Testing the subroutines for the energy" << '\n';
     std::cout << "Kinetic term 1 = " << compute_Term1_T_ZORA(mra, Nabla_Psi_2c, K_tree, Psi_2c) << '\n';
     std::cout << "Kinetic term 2 = " << compute_Term2_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c) << '\n';
-    //std::cout << "Rotor term = " << compute_rotor(mra, Nabla_Psi_2c, D, K_tree, Psi_2c) << '\n';
-    //std::cout << "Sigma dot-p = " << compute_Sigma_dot_p(mra, Nabla_Psi_2c, D, K_tree, Psi_2c) << '\n';
+    ComplexDouble kin_3 = compute_Term3_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c);
+    std::cout << "Kinetic term 3 = " << kin_3 << '\n';
+    std::cout << "Total = " << compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree) << '\n';
+    std::cout << "************************************************************" << '\n';
+
+    
+
+
     
     
     
