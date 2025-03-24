@@ -411,6 +411,7 @@
  template <int D> void apply(CompFunction<D> &out, DerivativeOperator<D> &oper, CompFunction<D> &inp, int dir, const ComplexDouble (*metric)[4]) {
      // TODO: sums and not only each components independently, when concrete examples with non diagonal metric are tested
  
+     out = inp.paramCopy(true);
      for (int icomp = 0; icomp < inp.Ncomp(); icomp++) {
          for (int ocomp = 0; ocomp < 4; ocomp++) {
              if (std::norm(metric[icomp][ocomp]) > MachinePrec) {
@@ -469,7 +470,7 @@
          for (int icomp = 0; icomp < inp.Ncomp(); icomp++) {
              for (int ocomp = 0; ocomp < 4; ocomp++) {
                  if (std::norm(metric[icomp][ocomp]) > MachinePrec) {
-                     grad_d->func_ptr->Ncomp = ocomp;
+                     grad_d->func_ptr->Ncomp = ocomp + 1;
                      if (inp.isreal()) {
                          grad_d->func_ptr->isreal = 1;
                          grad_d->func_ptr->iscomplex = 0;

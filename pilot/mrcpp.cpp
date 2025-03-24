@@ -244,11 +244,14 @@ int main(int argc, char **argv) {
     // Gradient of K
     mrcpp::ABGVOperator<3> D(mra, 0.0, 0.0); // deine the ABGV operator
     Nabla_K_tree = mrcpp::gradient(D, K_tree);
+// ==================================================================================================================================
 
+    std::cout << "apply" << '\n';
     CompFunction<3> One_dir_deriv(mra);
     mrcpp::apply(One_dir_deriv, D, K_tree, 0);
     std::cout << "One_dir_deriv = " << One_dir_deriv.getSquareNorm() << '\n';
 
+    std::cout << "Post apply" << '\n';  
     
 
     
