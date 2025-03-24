@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
     std::cout << "************************************" << '\n';
     std::cout << '\n'<< " Psi_trial (top) square norm = " << Psi_2c[0].getSquareNorm() << '\n';
     std::cout << '\n'<< " Psi_trial (bottom) square norm = " << Psi_2c[1].getSquareNorm() << '\n' << '\n';
-    std::cout << "************************************" << '\n';
+    
     }
     
 
@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
 
     double E;
 
-    std::cout << "************************************************************" << '\n' << "Debug 1" << '\n';
+    
     // We now define all the trees that will be used to compute the enrgy and the SCF cycle
     mrcpp::CompFunction<3> K_tree(mra);  // -> This is the tree that will hold the K function
     mrcpp::CompFunction<3> K_inverted_tree(mra);  // -> This is the tree that will hold the K^-1 function
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
         return (1 - (constant / abs_r));
     };
 
-    std::cout << "************************************************************" << '\n' << "Debug 2" << '\n';
+
     // Project the K and K^-1 functions on the tree
     mrcpp::project(K_tree, K_r,building_precision);
     mrcpp::project(K_inverted_tree, K_inverted_r,building_precision);
@@ -243,21 +243,13 @@ int main(int argc, char **argv) {
 
     // Gradient of K
     mrcpp::ABGVOperator<3> D(mra, 0.0, 0.0); // deine the ABGV operator
+    Nabla_K_tree = mrcpp::gradient(D, K_tree);
 
-    std::cout << K_tree.getSquareNorm() << '\n';
-    std::cout << "Real? " << K_tree.isreal() << '\n';
-    std::cout << "Imag? " << K_tree.iscomplex() << '\n';
+    CompFunction<3> One_dir_deriv(mra);
+    mrcpp::apply(One_dir_deriv, D, K_tree, 0);
+    std::cout << "One_dir_deriv = " << One_dir_deriv.getSquareNorm() << '\n';
 
-
-
-
-
-    //mrcpp::apply(apply_precision, tmp, D, *K_tree.CompD[0], 1, false);
-    //Nabla_K_tree 
-    auto tmp = mrcpp::gradient(D,*K_tree.CompD[0]); // Gradient of K
-
-
-    std::cout << "************************************************************" << '\n' << "Debug 3" << '\n';
+    
 
     
     // Now we compute the Gradient of Psi_2c as well
@@ -267,34 +259,59 @@ int main(int argc, char **argv) {
     Nabla_Psi_b = mrcpp::gradient(D, Psi_2c[1]);
 
 
-    std::cout << "************************************************************" << '\n' << "Debug 4" << '\n';
+    
 
     // Create a vector to hold both Nabla_Psi_t and Nabla_Psi_b
-    std::vector<std::vector<mrcpp::CompFunction<3>*>> Nabla_Psi_2c = {Nabla_Psi_t, Nabla_Psi_b};
+    std::vector<std::vector<mrcpp::CompFunction<3>*>> Nabla_Psi_2c;
+    Nabla_Psi_2c.push_back(Nabla_Psi_t);
+    Nabla_Psi_2c.push_back(Nabla_Psi_b);
+
+    std::cout << "Nabla_Psi_t[0] square norm = " << Nabla_Psi_t[0]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_t[1] square norm = " << Nabla_Psi_t[1]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_t[2] square norm = " << Nabla_Psi_t[2]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_b[0] square norm = " << Nabla_Psi_b[0]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_b[1] square norm = " << Nabla_Psi_b[1]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_b[2] square norm = " << Nabla_Psi_b[2]->getSquareNorm() << '\n';
 
 
-    std::cout << "************************************************************" << '\n' << "Debug 5" << '\n';
+
+    std::cout << "************************************************************" << '\n';
 
 
 
+    // Print the norm of the difference
+    std::cout << "Testing the subroutines for the energy" << '\n';
+    std::cout << "Kinetic term 1 = " << compute_Term1_T_ZORA(mra, Nabla_Psi_2c, K_tree, Psi_2c) << '\n';
+    std::cout << "Kinetic term 2 = " << compute_Term2_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c) << '\n';
+    //std::cout << "Rotor term = " << compute_rotor(mra, Nabla_Psi_2c, D, K_tree, Psi_2c) << '\n';
+    //std::cout << "Sigma dot-p = " << compute_Sigma_dot_p(mra, Nabla_Psi_2c, D, K_tree, Psi_2c) << '\n';
+    
+    
+    
+    
+    
+    std::cout << "************************************************************" << '\n';
+    
+    
 
-
-
-
-
-
-
-/*     // Print the norm of the difference
+    /*
+    // Print the norm of the difference
     std::cout << "Cycle " << num_cycle << " done...  Norm of the difference = "<< norm_diff << '\n';
     E = energy_ZORA(mra, Psi_2c, Potential_tree);
     std::cout << "Energy = " << E << '\n';
-    
+     
     //std::cout << "Energy = " << E << '\n';
     mu = std::sqrt(-2.0 * E);
     std::cout << "mu = " << mu << '\n';
     std::cout << "************************************************************" << '\n';
     num_cycle++;
- */
+    */
+
+
+
+
+
+    
 
     
 
