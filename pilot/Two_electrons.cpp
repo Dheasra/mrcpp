@@ -45,7 +45,7 @@ int Relativity;
 
 
 
-
+#include "He_atom_utils.h"
 
 
 
@@ -566,7 +566,7 @@ int main(int argc, char **argv) {
 
     // Print the norm of the difference
     std::cout << "Cycle " << num_cycle << " done...  Norm of the difference = "<< norm_diff << '\n';
-    if (Relativity == 0){
+    /* if (Relativity == 0){
         E = Energy_Non_Relativistic(building_precision, mra, GVPhi_tree, core_el_tree, J_tree, n_electrons);
     }
     else if (Relativity == 1){
@@ -575,7 +575,8 @@ int main(int argc, char **argv) {
     else{
         std::cout << "Relativity not supported" << '\n';
         return 0;
-    }
+    } */
+   E = compute_He_energy(mra, GVPhi_tree, Potential_tree);
     
     //std::cout << "Energy = " << E << '\n';
     mu = std::sqrt(-2.0 * E);
@@ -586,9 +587,9 @@ int main(int argc, char **argv) {
     
 
 
-    return 0;
+    //return 0;
 
-
+/* 
     while (norm_diff > epsilon) {
         
 
@@ -649,7 +650,7 @@ int main(int argc, char **argv) {
         // Increment the cycle counter
         num_cycle++;
     }
-
+ */
     print::footer(0, timer, 2);
     return 0;
 }

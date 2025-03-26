@@ -1,17 +1,22 @@
-#include "MRCPP/Printer"
-#include "MRCPP/Timer"
-#include "MRCPP/Gaussians"
-#include "MRCPP/Plotter"
-#include "MRCPP/MWFunctions"
-#include "MRCPP/MWOperators"
-
 #include <cstdlib>
 #include <numeric>
+#include <iostream>
+#include <vector>
+
+
+#include "../api/Printer"
+#include "../api/Timer"
+#include "../api/Gaussians"
+#include "../api/Plotter"
+#include "../api/MWFunctions"
+#include "../api/MWOperators"
+
+
 
 using namespace mrcpp;
 
 // DEBUG
-bool debug = false;
+bool debug = true;
 
 // GLOBAL VARIABLES
 int Z;
@@ -26,6 +31,9 @@ double building_precision;
 double epsilon;
 int Relativity;
 
+#include "my_utilities.h"
+#include "ZORA_utilities.h"
+
 /*
  * ==================================================================================================================================
  * This program will introduce relativistic effects in the H atom, in detail, with the ZORA approximation.
@@ -39,378 +47,6 @@ int Relativity;
  * Remember that each p is an operator, so the product is not trivial.
  * ==================================================================================================================================
 */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ==================================================================================================================================
-
-
-double Energy_Non_Relativistic(double precision, MultiResolutionAnalysis<3> &MRA, FunctionTree<3> &f, FunctionTree<3> &V_ce, FunctionTree<3> &J, int &n_electrons){
-    FunctionTree<3> f_V(MRA);
-    FunctionTreeVector<3> Nabla_f; // THE GRADIENT WILL BE A VECTOR!!!!!!!
-    double norm_sqrd = dot(f,f);
- 
-    mrcpp::ABGVOperator<3> D(MRA, 0.0, 0.0);
-    
-    // ONE ELECTRON PART
-    Nabla_f = mrcpp::gradient(D,f);
-
-    FunctionTree<3> Nabla_fx(MRA); 
-    FunctionTree<3> Nabla_fy(MRA); 
-    FunctionTree<3> Nabla_fz(MRA); 
-    get_func(Nabla_f,0).deep_copy(&Nabla_fx);
-    get_func(Nabla_f,1).deep_copy(&Nabla_fy);
-    get_func(Nabla_f,2).deep_copy(&Nabla_fz);
-
-    // Compute the kinetic energy
-    double nabla_f_norm_sqrd = dot(Nabla_fx,Nabla_fx) + dot(Nabla_fy,Nabla_fy) + dot(Nabla_fz,Nabla_fz);
-    double kinetic_energy = 0.5000000000 * nabla_f_norm_sqrd/ norm_sqrd;
-    
-    // Compute the product of the gradient and the function
-    mrcpp::multiply(precision,f_V, 1.0, f, V_ce);
-    double potential_energy_one_electron = dot(f,f_V) / norm_sqrd;
-
-    double One_electron_energy = potential_energy_one_electron + kinetic_energy;
-
-    // TWO ELECTRON PART - Only applyable if we have more than 2 electrons
-    double Two_electron_energy = 0;
-    if (n_electrons == 2){
-        FunctionTree<3> Jf_tree(MRA);
-        mrcpp::multiply(precision,Jf_tree, 1.0, J, f);
-        // Two_electron_energy = \sum_{ij} < \Phi_i | J | \Phi_j > - < \Phi_i | K | \Phi_j > = < f | Jf > - 0 
-        Two_electron_energy = n_electrons * dot(f,Jf_tree) / norm_sqrd; // should be for each of the 2 electrons but they occupy the same spatial orbital, being orthonormal for the spin
-        // multiplied by 2 because we have 2 electrons, so one for each spin-orbital
-    }
-
-
-    double potential_energy_total = potential_energy_one_electron * n_electrons + 0.5 * Two_electron_energy;
-
-    std::cout << '\n';
-    std::cout << " T    = " << n_electrons * kinetic_energy << '\n';
-    std::cout << " V_ce = " << n_electrons * potential_energy_one_electron  << '\n';
-    std::cout << " V_ee = " << 0.5 * Two_electron_energy <<'\n';
-    std::cout << " V_t  = " << potential_energy_total << '\n' << '\n';
-
-    double result = One_electron_energy + 0.5 * Two_electron_energy;
-
-    std::cout << "  ########################## " << '\n';
-    std::cout << "  | E = " << result << " |" << '\n';
-    std::cout << "  ########################## " << '\n' << '\n';
-    return result;
-}
-
-// ==================================================================================================================================
-
-
-double Energy_ZORA(double precision, MultiResolutionAnalysis<3> &MRA, FunctionTree<3> &f, FunctionTree<3> &V){
-    // Declare the FunctionTrees
-    FunctionTree<3> f_V(MRA);
-    FunctionTree<3> K_tree(MRA);
-    FunctionTree<3> Kf_tree(MRA);
-
-    // Define the K function
-    std::function<double(const Coord<3> &x)> K_r = [&V] (const mrcpp::Coord<3> &r) -> double {
-        double result = 1.0 - V.evalf(r) / (2.0 * m * c * c);
-        return 1.0 / result;
-    };
-
-    // And project it on the correspondig tree
-    mrcpp::project<3>(precision, K_tree, K_r);
-
-
-
-    // Define the type of derivative operator: ABGV
-    mrcpp::ABGVOperator<3> D(MRA, 0.0, 0.0);
-
-
-    // *********************************************
-    // Now we can start the subroutine:
-    // Compute the norm of the function (not strictly needed)
-    double norm_sqrd = dot(f,f);
- 
-
-    // Compute the gradient of f
-    // Now we declare all the function trees needed
-    FunctionTreeVector<3> Nabla_f; 
-    FunctionTreeVector<3> Nabla_K;
-    FunctionTreeVector<3> Nabla_Kf;
-    Nabla_f = mrcpp::gradient(D,f);
-    Nabla_K = mrcpp::gradient(D,K_tree);
-    
-    // Compute K(r) * f
-    mrcpp::multiply(precision,Kf_tree, 1.0, K_tree, f);
-
-    // And finde the gradient of it
-    Nabla_Kf = mrcpp::gradient(D,Kf_tree);
-
-    // Assign the components to the corresponding functions
-    FunctionTree<3> Nabla_fx(MRA); 
-    FunctionTree<3> Nabla_fy(MRA); 
-    FunctionTree<3> Nabla_fz(MRA); 
-    FunctionTree<3> Nabla_Kfx(MRA);
-    FunctionTree<3> Nabla_Kfy(MRA);   
-    FunctionTree<3> Nabla_Kfz(MRA);
-    get_func(Nabla_f,0).deep_copy(&Nabla_fx);
-    get_func(Nabla_f,1).deep_copy(&Nabla_fy);
-    get_func(Nabla_f,2).deep_copy(&Nabla_fz);
-    get_func(Nabla_Kf,0).deep_copy(&Nabla_Kfx);
-    get_func(Nabla_Kf,1).deep_copy(&Nabla_Kfy);
-    get_func(Nabla_Kf,2).deep_copy(&Nabla_Kfz);
-
-
-    // Same for the K gradient
-    FunctionTree<3> Nabla_Kx(MRA);
-    FunctionTree<3> Nabla_Ky(MRA);
-    FunctionTree<3> Nabla_Kz(MRA);
-    get_func(Nabla_K,0).deep_copy(&Nabla_Kx);
-    get_func(Nabla_K,1).deep_copy(&Nabla_Ky);
-    get_func(Nabla_K,2).deep_copy(&Nabla_Kz);
-
-    // p \cdot K(r) p = - < f \Nabla(K) | \Nabla(f) > + < \Nabla(f * K) | \Nabla(f) >
-
-    // Compute the first term of the ZORA kinetic energy, but first we need the [f * \Nabla(K)]
-    FunctionTree<3> f_Nabla_Kx(MRA);
-    FunctionTree<3> f_Nabla_Ky(MRA);
-    FunctionTree<3> f_Nabla_Kz(MRA);
-    mrcpp::multiply(precision,f_Nabla_Kx, 1.0, f, Nabla_Kx);
-    mrcpp::multiply(precision,f_Nabla_Ky, 1.0, f, Nabla_Ky);
-    mrcpp::multiply(precision,f_Nabla_Kz, 1.0, f, Nabla_Kz);
-
-    double f_Nabla_K__dot__Nabla_f = dot(f_Nabla_Kx,Nabla_fx) + dot(f_Nabla_Ky,Nabla_fy) + dot(f_Nabla_Kz,Nabla_fz);
-
-    // Compute the second term of the ZORA kinetic energy
-    double Nabla_Kf__dot__Nabla_f = dot(Nabla_Kfx,Nabla_fx) + dot(Nabla_Kfy,Nabla_fy) + dot(Nabla_Kfz,Nabla_fz);
-
-    
-    // Compute the kinetic energy
-    double kinetic_energy = 1 / (2 * m);
-    kinetic_energy = kinetic_energy * ( -f_Nabla_K__dot__Nabla_f + Nabla_Kf__dot__Nabla_f);
-    
-
-
-    // For the potential part:
-    mrcpp::multiply(precision,f_V, 1.0, f, V);
-    double potential_energy = dot(f,f_V) / norm_sqrd;
-
-    double result = potential_energy + kinetic_energy;
-
-    std::cout << "T_ZORA = " << kinetic_energy << '\n';
-    std::cout << "V = " << potential_energy << '\n' << '\n';
-
-    std::cout << "  ########################### " << '\n';
-    std::cout << "  | E = " << result << " |" << '\n';
-    std::cout << "  ########################### " << '\n' << '\n';
-    return result;
-}
-
-// ==================================================================================================================================
-
-double energy_update(MultiResolutionAnalysis<3> &MRA, FunctionTree<3> &Tilde_phi, FunctionTree<3> &Phi, FunctionTree<3> &V){
-    FunctionTree<3> DeltaPhi(MRA);  // Allocate space for the difference
-    FunctionTree<3> V_DeltaPhi(MRA); // Allocate space for the product of the potential and the difference
-
-    // norm = <Tilde_phi|Tilde_phi>
-    double norm = dot(Tilde_phi,Tilde_phi);
- 
-    // |DeltaPhi> = |Tilde_phi> - |Phi>
-    mrcpp::add(1e-5,DeltaPhi,-1.0,Phi, 1.0,Tilde_phi);
-    
-    // |V_DeltaPhi> = V * |DeltaPhi>
-    mrcpp::multiply(0.000001,V_DeltaPhi, 1.0, V, DeltaPhi);
-    
-    // <Tilde_phi|V * DeltaPhi>
-    double result = dot(V_DeltaPhi,Tilde_phi);
-    // <Tilde_phi|V * DeltaPhi> / <Tilde_phi|Tilde_phi>
-    return (result / norm) ;
-}
-
-
-// ==================================================================================================================================
-
-
-
-void apply_Helmholtz(double mu,double building_precision, MultiResolutionAnalysis<3> &MRA, FunctionTree<3> &out, FunctionTree<3> &f){
-    HelmholtzOperator Helm(MRA, mu, building_precision);
-    apply(building_precision, out, Helm, f, -1, false);
-}
-
-
-
-// ==================================================================================================================================
-
-// Funzione per leggere i parametri dal file
-std::unordered_map<std::string, double> readParameters(const std::string &filename) {
-    std::unordered_map<std::string, double> parameters;
-    std::ifstream infile(filename);
-    std::string line;
-
-    while (std::getline(infile, line)) {
-        std::istringstream iss(line);
-        std::string key;
-        double value;
-        if (iss >> key >> value) {
-            parameters[key] = value;
-        }
-    }
-
-    return parameters;
-}
-
-// ==================================================================================================================================
-
-
-
-
-
-
-void Build_J_operator(mrcpp::MultiResolutionAnalysis<3> &MRA,mrcpp::FunctionTree<3> &J, mrcpp::FunctionTree<3> &Phi, int n_electrons){
-    if (n_electrons == 1){
-        return;
-    }
-
-    mrcpp::FunctionTree<3> rho(MRA); // -> This is the tree that will hold the electron density
-    mrcpp::FunctionTree<3> J_tmp(MRA);
-    // rho = Phi^2
-    mrcpp::multiply(building_precision*0.01, rho, 1.0, Phi, Phi);
-
-
-    // I build the Poisson operator as a L.C. of Gaussians (so it's faster to integrate)
-    mrcpp::PoissonOperator Poisson(MRA, building_precision);
-    J.clear();
-    // J = Poisson(rho)
-    mrcpp::apply(building_precision, J_tmp, Poisson, rho, -1, false);
-
-    // J = J_tmp + J_tmp
-    mrcpp::add(building_precision, J, 1.0, J_tmp, -0.5, J_tmp);
-}
-//==================================================================================================================================
-
-
-void compute_2e_energy(MultiResolutionAnalysis<3> &MRA,int n_electrons, FunctionTreeVector<3,double> Phi_vec, FunctionTree<3> &V, FunctionTreeVector<3,double> &J_vec, FunctionTreeVector<3,double> &K_Phi_vec){
-    FunctionTree<3> J_tmp(MRA);
-    FunctionTree<3> J_accumulation(MRA);
-    FunctionTree<3> J_tmp_sum(MRA);
-    FunctionTree<3> K_tmp(MRA);
-    FunctionTree<3> K_tmp_Phi_b(MRA);
-    FunctionTree<3> K_accumulation(MRA);
-    FunctionTree<3> K_tmp_sum(MRA);
-    FunctionTree<3> Phi_tmp(MRA);
-    FunctionTree<3> PhiA_star_times_PhiA(MRA);
-    FunctionTree<3> PhiB_star_times_PhiB(MRA);
-    FunctionTree<3> PhiA_star_times_PhiB(MRA);
-    
-    mrcpp::PoissonOperator Poisson(MRA, building_precision);
-
-    std::vector<double> J_n;
-    std::vector<double> K_n;
-
-    J_n.clear();
-    K_n.clear();
-
-    // Compute the J operator for each of the electrons
-    for (int a = 0; a < n_electrons/2; a++){
-        PhiA_star_times_PhiA.clear();
-        // \rho_a = \Phi[a]^* \Phi[a]
-        
-        mrcpp::multiply(building_precision,PhiA_star_times_PhiA, 1.0, get_func(Phi_vec, a), get_func(Phi_vec, a));
-        
-        J_accumulation.clear();
-        for (int b = 0; b < n_electrons; b++){
-            J_tmp_sum.clear();
-            PhiB_star_times_PhiB.clear();
-            // \rho_b = \Phi[b]^* \Phi[b]
-            mrcpp::multiply(building_precision,PhiB_star_times_PhiB, 1.0, get_func(Phi_vec, b), get_func(Phi_vec, b));
-            
-            J_tmp.clear();
-            // J_tmp(r) = \int \rho_b(r') / |r-r'| dr'
-            mrcpp::apply(building_precision, J_tmp, Poisson, PhiB_star_times_PhiB, -1, false);    
-            
-            // J_tmp_sum = J_accumulation + J_tmp: J_accumulation = \sum_{i=0}^{b} J_tmp[i]
-            mrcpp::add(building_precision, J_tmp_sum, 1.0, J_accumulation, 1.0, J_tmp);
-            
-            J_tmp_sum.deep_copy(&J_accumulation);
-
-        }
-        // save the operator for this orbital
-        J_accumulation.deep_copy(&get_func(J_vec, a)); // !!!!!!! -----> This is the J operator for the a-th as just \hat{J}
-        // Now we exit the first loop and we have accumulated the J operator for the a-th electron, by summing the densitie of all the electrons.
-
-        // Expectation value for the a-th orbital:
-        // J_n = < \Phi[a] | J | \Phi[a] >
-        J_n.push_back(dot(PhiA_star_times_PhiA, J_accumulation));
-    }
-
-
-    // Compute the K operator for each of the electrons
-    for (int a = 0; a < n_electrons/2; a++){
-        K_accumulation.clear();
-        for (int b = 0; b < n_electrons; b++){
-                K_tmp_sum.clear();
-
-
-                PhiA_star_times_PhiB.clear();
-                // \rho_ab = \Phi[a]^* \Phi[b]
-                mrcpp::multiply(building_precision,PhiA_star_times_PhiB, 1.0, get_func(Phi_vec, a), get_func(Phi_vec, b));
-
-
-                K_tmp.clear(); 
-                // K_tmp(r) = \int \rho_b(r') / |r-r'| dr'
-                mrcpp::apply(building_precision, K_tmp, Poisson, PhiA_star_times_PhiB, -1, false);    
-                
-                K_tmp_Phi_b.clear();
-                // K_tmp_Phi = \Phi[b] * \int \Phi[a]^* * \Phi[b] / |r-r'| dr'
-                mrcpp::multiply(building_precision, K_tmp_Phi_b, 1.0, K_tmp, get_func(Phi_vec,b));
-
-
-                // K_tmp_sum = K_accumulation + K_tmp_Phi:      K_accumulation = \sum_{i=0}^{b} K_tmp_Phi_b[i]
-                mrcpp::add(building_precision, K_tmp_sum, 1.0, K_accumulation, 1.0, K_tmp_Phi_b);
-                
-                K_tmp_sum.deep_copy(&K_accumulation);
-        }
-        K_accumulation.deep_copy(&get_func(K_Phi_vec, a)); // !!!!!-----> This is the K operator for the a-th as \hat{K}\ket{\Phi[a]}
-        // Now we exit the first loop and we have accumulated the K operator for the a-th electron
-
-        // Expectation value for the a-th orbital:
-        // K_n = < \Phi[a] | K | \Phi[a] >
-        J_n.push_back(dot(get_func(Phi_vec,a), K_accumulation));
-    }
-    
-    double Two_electron_energy;
-    double coulomb_energy = std::accumulate(J_n.begin(), J_n.end(), 0.0);
-    double exchange_energy = std::accumulate(K_n.begin(), K_n.end(), 0.0);
-    Two_electron_energy = 2 * coulomb_energy - exchange_energy;
-    std::cout << "_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-" << '\n';
-    std::cout << "Computing the two electron energy contributions..." << '\n' << '\n';
-
-    std::cout << "Coulomb energy = " << coulomb_energy << '\n';
-    std::cout << "Exchange energy = " << exchange_energy << '\n';
-    std::cout << "Two electron energy = " << Two_electron_energy << '\n';
-    std::cout << "************************************************************" << '\n';
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
 
 
 // ==================================================================================================================================
@@ -473,16 +109,21 @@ int main(int argc, char **argv) {
     mrcpp::BoundingBox<3> bb(box);
     mrcpp::MultiResolutionAnalysis mra(bb, order, MaxLevel);
     // Also, we create the trees for each function we'll be dealing with
-    mrcpp::FunctionTree<3> VPhi_tree(mra);  // -> This is the tree that will hold the function
-    mrcpp::FunctionTree<3> GVPhi_tree(mra); // -> This is the tree that will hold the output of the convolution
-    mrcpp::FunctionTree<3> J_tree(mra); // -> This is the tree that will hold the [electron-electron] (pair) potential
-    mrcpp::FunctionTree<3> core_el_tree(mra); // -> This is the tree that will hold the [nucleus-electron] potential
+    mrcpp::CompFunction<3> VPhi_tree_top(mra);  // -> This is the tree that will hold the function
+    mrcpp::CompFunction<3> VPhi_tree_bottom(mra);  // -> This is the tree that will hold the function
+    mrcpp::CompFunction<3> GVPhi_tree_top(mra); // -> This is the tree that will hold the output of the convolution
+    mrcpp::CompFunction<3> GVPhi_tree_bottom(mra); // -> This is the tree that will hold the output of the convolution
+    mrcpp::CompFunction<3> core_el_tree(mra); // -> This is the tree that will hold the [nucleus-electron] potential
 
-    mrcpp::FunctionTree<3> Potential_tree(mra); // -> This is the tree that will hold the total potential
+    mrcpp::CompFunction<3> Potential_tree(mra); // -> This is the tree that will hold the total potential
     // Then the 2 auxiliary trees
-    mrcpp::FunctionTree<3> Normalized_difference_tree(mra);
-    mrcpp::FunctionTree<3> Phi_n_copy_tree(mra);
+    mrcpp::CompFunction<3> Normalized_difference_tree(mra);
+    mrcpp::CompFunction<3> Phi_n_copy_tree(mra);
 
+
+
+
+    
     // ==================================================================================================================================
     // ================= My function will be now a 1s H atom orbital in 3D, given by the following lambda function ======================
     // ==================================================================================================================================
@@ -501,7 +142,8 @@ int main(int argc, char **argv) {
     mrcpp::Coord<3> pos = {0,0,0};
     std::array<int,3> pow = {0,0,0};
     // Gaussian function
-    mrcpp::GaussFunc<3> Phi_trial(beta, alpha, pos, pow);
+    mrcpp::GaussFunc<3> Phi_trial_top(beta, alpha, pos, pow);
+    mrcpp::GaussFunc<3> Phi_trial_bottom(beta, alpha, pos, pow);
 
 
 
@@ -512,24 +154,30 @@ int main(int argc, char **argv) {
     };
 
     // 5) PROJECT the function ON the TREE
-    mrcpp::project<3>(building_precision, GVPhi_tree, Phi_trial); // I project the trial-function on the tree
-    GVPhi_tree.normalize();
-    std::cout << "Psi_trial" << GVPhi_tree << '\n';
+    mrcpp::project(GVPhi_tree_top, Phi_trial_top, building_precision); // I project the trial-function on the tree
+    mrcpp::project(GVPhi_tree_bottom, Phi_trial_bottom, building_precision); // I project the trial-function on the tree
 
+    double Psi_norm = std::sqrt(GVPhi_tree_top.getSquareNorm() + GVPhi_tree_bottom.getSquareNorm());
+    GVPhi_tree_top.rescale(1.0/Psi_norm);
+    GVPhi_tree_bottom.rescale(1.0/Psi_norm);
+
+    // Create a vector of CompFunction<3> to hold the components
+    std::vector<mrcpp::CompFunction<3>> Psi_2c;
+    Psi_2c.push_back(GVPhi_tree_top);
+    Psi_2c.push_back(GVPhi_tree_bottom);
+
+    
     // As well as the potential:
-    if (n_electrons == 1){
-    mrcpp::project<3>(building_precision, core_el_tree, V_ce); // I do the same with the potential
-    core_el_tree.deep_copy(&Potential_tree);
-    }
-    else if (n_electrons == 2){
-        mrcpp::project<3>(building_precision, core_el_tree, V_ce); // I do the same with the potential
-        Build_J_operator(mra,J_tree, GVPhi_tree, n_electrons);
-        mrcpp::add(building_precision, Potential_tree, double(n_electrons), core_el_tree, 1.0, J_tree);
-    }
-    else{
+    
+    mrcpp::project(core_el_tree, V_ce, building_precision); 
+    deep_copy(&Potential_tree, core_el_tree);
+    
+    if (n_electrons != 1){
         std::cout << "The number of elecrons is not supported" << '\n';
         return 0;
     }
+
+
 
 
 
@@ -537,14 +185,16 @@ int main(int argc, char **argv) {
     // Befofe starting the SCF cycle, let's print some debugging information:
     std::cout << "Here is some debugging information: " << '\n';
     std::cout << "************************************" << '\n';
-    std::cout << "Potential_tree = " << '\n';
-    std::cout << Potential_tree << '\n';
+    std::cout << "Potential_tree Norm = ";
+    std::cout << Potential_tree.getSquareNorm() << '\n';
     std::cout << "************************************" << '\n';
-    std::cout << "Gauss_tree = " << '\n';
-    std::cout << GVPhi_tree << '\n';
-    std::cout << "************************************" << '\n';
+    std::cout << '\n'<< " Psi_trial (top) square norm = " << Psi_2c[0].getSquareNorm() << '\n';
+    std::cout << '\n'<< " Psi_trial (bottom) square norm = " << Psi_2c[1].getSquareNorm() << '\n' << '\n';
+    
     }
-    /*
+    
+
+      /*
      *-----------------------------------
      *-----------------------------------
      *         BEGIN SCF CYCLE
@@ -563,33 +213,109 @@ int main(int argc, char **argv) {
 
     double E;
 
+    
+    // We now define all the trees that will be used to compute the enrgy and the SCF cycle
+    mrcpp::CompFunction<3> K_tree(mra);  // -> This is the tree that will hold the K function
+    mrcpp::CompFunction<3> K_inverted_tree(mra);  // -> This is the tree that will hold the K^-1 function
+    std::vector<mrcpp::CompFunction<3> *> Nabla_K_tree(3); // -> This is the tree that will hold the gradient of K
+
+    // K(r)
+    std::function<double(const Coord<3> &x)> K_r = [] (const mrcpp::Coord<3> &r) -> double {
+        double abs_r = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+        double constant = 1.0/(2.0 * m * c * c);
+        return  abs_r / (abs_r - constant);
+    };
+    // K^-1(r)
+    std::function<double(const Coord<3> &x)> K_inverted_r = [] (const mrcpp::Coord<3> &r) -> double {
+        double abs_r = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+        double constant = 1.0/(2.0 * m * c * c);
+        return (1 - (constant / abs_r));
+    };
+
+
+    // Project the K and K^-1 functions on the tree
+    mrcpp::project(K_tree, K_r,building_precision);
+    mrcpp::project(K_inverted_tree, K_inverted_r,building_precision);
+
+
+
+    
+
+    // Gradient of K
+    mrcpp::ABGVOperator<3> D(mra, 0.0, 0.0); // deine the ABGV operator
+    Nabla_K_tree = mrcpp::gradient(D, K_tree);
+
+    CompFunction<3> One_dir_deriv(mra);
+    mrcpp::apply(One_dir_deriv, D, K_tree, 0);
+    std::cout << "One_dir_deriv = " << One_dir_deriv.getSquareNorm() << '\n';
+
+    
+
+    
+    // Now we compute the Gradient of Psi_2c as well
+    std::vector<mrcpp::CompFunction<3>*> Nabla_Psi_t;
+    std::vector<mrcpp::CompFunction<3>*> Nabla_Psi_b;  
+    Nabla_Psi_t = mrcpp::gradient(D, Psi_2c[0]);
+    Nabla_Psi_b = mrcpp::gradient(D, Psi_2c[1]);
+
+
+    
+
+    // Create a vector to hold both Nabla_Psi_t and Nabla_Psi_b
+    std::vector<std::vector<mrcpp::CompFunction<3>*>> Nabla_Psi_2c;
+    Nabla_Psi_2c.push_back(Nabla_Psi_t);
+    Nabla_Psi_2c.push_back(Nabla_Psi_b);
+
+    std::cout << "Nabla_Psi_t[0] square norm = " << Nabla_Psi_t[0]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_t[1] square norm = " << Nabla_Psi_t[1]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_t[2] square norm = " << Nabla_Psi_t[2]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_b[0] square norm = " << Nabla_Psi_b[0]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_b[1] square norm = " << Nabla_Psi_b[1]->getSquareNorm() << '\n';
+    std::cout << "Nabla_Psi_b[2] square norm = " << Nabla_Psi_b[2]->getSquareNorm() << '\n';
+
+
+
+    std::cout << "************************************************************" << '\n';
+
+
 
     // Print the norm of the difference
-    std::cout << "Cycle " << num_cycle << " done...  Norm of the difference = "<< norm_diff << '\n';
-    if (Relativity == 0){
-        E = Energy_Non_Relativistic(building_precision, mra, GVPhi_tree, core_el_tree, J_tree, n_electrons);
-    }
-    else if (Relativity == 1){
-        E = Energy_ZORA(building_precision, mra, GVPhi_tree, Potential_tree);
-    }
-    else{
-        std::cout << "Relativity not supported" << '\n';
-        return 0;
-    }
+    std::cout << "Testing the subroutines for the energy" << '\n';
+    std::cout << "Kinetic term 1 = " << compute_Term1_T_ZORA(mra, Nabla_Psi_2c, K_tree, Psi_2c) << '\n';
+    std::cout << "Kinetic term 2 = " << compute_Term2_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c) << '\n';
+    //std::cout << "Rotor term = " << compute_rotor(mra, Nabla_Psi_2c, D, K_tree, Psi_2c) << '\n';
+    //std::cout << "Sigma dot-p = " << compute_Sigma_dot_p(mra, Nabla_Psi_2c, D, K_tree, Psi_2c) << '\n';
     
+    
+    
+    
+    
+    std::cout << "************************************************************" << '\n';
+    
+    
+
+    /*
+    // Print the norm of the difference
+    std::cout << "Cycle " << num_cycle << " done...  Norm of the difference = "<< norm_diff << '\n';
+    E = energy_ZORA(mra, Psi_2c, Potential_tree);
+    std::cout << "Energy = " << E << '\n';
+     
     //std::cout << "Energy = " << E << '\n';
     mu = std::sqrt(-2.0 * E);
     std::cout << "mu = " << mu << '\n';
     std::cout << "************************************************************" << '\n';
     num_cycle++;
+    */
+
+
+
+
 
     
 
+    
 
-    return 0;
-
-
-    while (norm_diff > epsilon) {
+    /* while (norm_diff > epsilon) {
         
 
 
@@ -609,6 +335,7 @@ int main(int argc, char **argv) {
         GVPhi_tree.clear();
 
         // GVPhi_tree = \Tilde{\Phi^{n+1}}= - 2 * G^\mu (V \Phi^{n})
+                                                                                                //mrcpp::apply(apply_precision, GVPhi_tree, Helm, VPhi_tree, maxIter, false);
         
         apply_Helmholtz(mu,building_precision, mra, GVPhi_tree, VPhi_tree);
 
@@ -617,7 +344,7 @@ int main(int argc, char **argv) {
 
         // Normalize the function: \Tilde{\Phi^{n+1}} --> \Phi^{n+1}
         GVPhi_tree.normalize();
-        Build_J_operator(mra,J_tree, GVPhi_tree, n_electrons);
+    
         // Normalized_difference_tree = \Phi^{n+1} - \Phi^{n}
         mrcpp::add(apply_precision, Normalized_difference_tree, +1.0, GVPhi_tree, -1.0, Phi_n_copy_tree);
         // norm_diff = || \Phi^{n+1} - \Phi^{n} ||
@@ -630,12 +357,8 @@ int main(int argc, char **argv) {
 
         // Print the norm of the difference
         std::cout << "Cycle " << num_cycle << " done...  Norm of the difference = "<< norm_diff << '\n';
-        if (Relativity == 0){
-            E = Energy_Non_Relativistic(building_precision, mra, GVPhi_tree, core_el_tree, J_tree, n_electrons);
-        }
-        else if (Relativity == 1){
-            E = Energy_ZORA(building_precision, mra, GVPhi_tree, Potential_tree);
-        }
+        
+        E = energy_ZORA(building_precision, mra, GVPhi_tree, Potential_tree);
         mu = std::sqrt(-2.0 * E);
         std::cout << "mu = " << mu << '\n';
         std::cout << '\n';
@@ -649,7 +372,7 @@ int main(int argc, char **argv) {
         // Increment the cycle counter
         num_cycle++;
     }
-
+ */
     print::footer(0, timer, 2);
     return 0;
 }

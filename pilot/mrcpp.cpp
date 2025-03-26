@@ -16,7 +16,7 @@
 using namespace mrcpp;
 
 // DEBUG
-bool debug = true;
+bool debug = false;
 
 // GLOBAL VARIABLES
 int Z;
@@ -222,14 +222,14 @@ int main(int argc, char **argv) {
     // K(r)
     std::function<double(const Coord<3> &x)> K_r = [] (const mrcpp::Coord<3> &r) -> double {
         double abs_r = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
-        double constant = 1.0/(2.0 * m * c * c);
-        return  abs_r / (abs_r - constant);
+        double constant = Z/(2.0 * m * c * c);
+        return  abs_r / (abs_r + constant);
     };
     // K^-1(r)
     std::function<double(const Coord<3> &x)> K_inverted_r = [] (const mrcpp::Coord<3> &r) -> double {
         double abs_r = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
-        double constant = 1.0/(2.0 * m * c * c);
-        return (1 - (constant / abs_r));
+        double constant = Z/(2.0 * m * c * c);
+        return (1 + (constant / abs_r));
     };
 
 
@@ -284,14 +284,26 @@ int main(int argc, char **argv) {
 
 
     // Print the norm of the difference
-    std::cout << "Testing the subroutines for the energy" << '\n';
-    std::cout << "Kinetic term 1 = " << compute_Term1_T_ZORA(mra, Nabla_Psi_2c, K_tree, Psi_2c) << '\n';
-    std::cout << "Kinetic term 2 = " << compute_Term2_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c) << '\n';
-    ComplexDouble kin_3 = compute_Term3_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c);
-    std::cout << "Kinetic term 3 = " << kin_3 << '\n';
-    std::cout << "Total = " << compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree) << '\n';
+    if (debug){
+        std::cout << "Testing the subroutines for the energy" << '\n';
+        std::cout << "Kinetic term 1 = " << compute_Term1_T_ZORA(mra, Nabla_Psi_2c, K_tree, Psi_2c) << '\n';
+        std::cout << "Kinetic term 2 = " << compute_Term2_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c) << '\n';
+        ComplexDouble kin_3 = compute_Term3_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c);
+        std::cout << "Kinetic term 3 = " << kin_3 << '\n';
+    }
+    //ComplexDouble E_compl = compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree);
+    //E = E_compl.real();
+    E = -0.1284100448238;
+    std::cout << "Total = " << E << '\n';
     std::cout << "************************************************************" << '\n';
-
+    std::cout  << '\n' << "Now we start the SCF cycle" << '\n';
+    std::cout << "Psi_2c[0] square norm = " << Psi_2c[0].getSquareNorm() << '\n';
+    std::cout << "Psi_2c[1] square norm = " << Psi_2c[1].getSquareNorm() << '\n';
+    std::vector<mrcpp::CompFunction<3>> Psi_2c_next(2);
+    apply_Helmholtz_ZORA(mra, Psi_2c, Nabla_Psi_2c, Nabla_K_tree, Potential_tree, K_tree, K_inverted_tree, E , Psi_2c_next);
+    std::cout << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
+    std::cout << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
+    
     
 
 
