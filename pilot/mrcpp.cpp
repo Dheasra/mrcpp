@@ -143,7 +143,19 @@ int main(int argc, char **argv) {
     std::array<int,3> pow = {0,0,0};
     // Gaussian function
     mrcpp::GaussFunc<3> Phi_trial_top(beta, alpha, pos, pow);
-    mrcpp::GaussFunc<3> Phi_trial_bottom(beta, alpha, pos, pow);
+    mrcpp::GaussFunc<3> Phi_trial_bottom(beta*100, 1000*alpha, pos, pow);
+
+    std::function<double(const Coord<3> &x)> slater = [] (const mrcpp::Coord<3> &r) -> double {
+        auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+        double alpha = 1.0;
+        return exp(-alpha*R);
+    };
+
+    std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3> &r) -> double {
+        return 0;
+    };
+    
+
 
 
 
@@ -153,9 +165,11 @@ int main(int argc, char **argv) {
         return -Z/R;
     };
 
+    mrcpp::project(Potential_tree, V_ce, building_precision);
+
     // 5) PROJECT the function ON the TREE
-    mrcpp::project(GVPhi_tree_top, Phi_trial_top, building_precision); // I project the trial-function on the tree
-    mrcpp::project(GVPhi_tree_bottom, Phi_trial_bottom, building_precision); // I project the trial-function on the tree
+    mrcpp::project(GVPhi_tree_top, slater, building_precision); // I project the trial-function on the tree
+    mrcpp::project(GVPhi_tree_bottom, zero, building_precision); // I project the trial-function on the tree
 
     double Psi_norm = std::sqrt(GVPhi_tree_top.getSquareNorm() + GVPhi_tree_bottom.getSquareNorm());
     GVPhi_tree_top.rescale(1.0/Psi_norm);
@@ -169,9 +183,11 @@ int main(int argc, char **argv) {
     
     // As well as the potential:
     
-    mrcpp::project(core_el_tree, V_ce, building_precision); 
+    /* mrcpp::project(core_el_tree, V_ce, building_precision); 
     deep_copy(&Potential_tree, core_el_tree);
-    
+     */
+
+
     if (n_electrons != 1){
         std::cout << "The number of elecrons is not supported" << '\n';
         return 0;
@@ -204,13 +220,8 @@ int main(int argc, char **argv) {
 
     // Parameters for the SCF
     double apply_precision = building_precision; // Precision of the convolution
-
-    //int maxIter = -1; //          -> Max number of iterations for the convolution, if -1 it goes untill the precision is reached
-    
     double norm_diff = 1;   //    -> Norm of the difference in the 2 consecutive iterations (initialized as 1 to begin the while loop)
-
     int num_cycle =  0; //         -> SCF cycle counter 
-
     double E;
 
     
@@ -229,13 +240,22 @@ int main(int argc, char **argv) {
     std::function<double(const Coord<3> &x)> K_inverted_r = [] (const mrcpp::Coord<3> &r) -> double {
         double abs_r = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
         double constant = Z/(2.0 * m * c * c);
-        return (1 + (constant / abs_r));
+        return (abs_r + constant) / abs_r;
     };
 
 
     // Project the K and K^-1 functions on the tree
     mrcpp::project(K_tree, K_r,building_precision);
     mrcpp::project(K_inverted_tree, K_inverted_r,building_precision);
+
+
+    
+    //if (debug){
+        std::cout << "Potential_tree Norm = " << Potential_tree.getSquareNorm() << '\n';
+        std::cout << "K_tree Norm = " << K_tree.getSquareNorm() << '\n';
+        std::cout << "K_inverted_tree Norm = " << K_inverted_tree.getSquareNorm() << '\n';
+    //}
+
 
 
 
@@ -282,119 +302,94 @@ int main(int argc, char **argv) {
     std::cout << "************************************************************" << '\n';
 
 
+    std::vector<mrcpp::CompFunction<3>> Psi_2c_next(2, mra);
 
-    // Print the norm of the difference
     if (debug){
         std::cout << "Testing the subroutines for the energy" << '\n';
         std::cout << "Kinetic term 1 = " << compute_Term1_T_ZORA(mra, Nabla_Psi_2c, K_tree, Psi_2c) << '\n';
         std::cout << "Kinetic term 2 = " << compute_Term2_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c) << '\n';
         ComplexDouble kin_3 = compute_Term3_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c);
         std::cout << "Kinetic term 3 = " << kin_3 << '\n';
-    }
-    //ComplexDouble E_compl = compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree);
-    //E = E_compl.real();
-    E = -0.1284100448238;
-    std::cout << "Total = " << E << '\n';
-    std::cout << "************************************************************" << '\n';
-    std::cout  << '\n' << "Now we start the SCF cycle" << '\n';
-    std::cout << "Psi_2c[0] square norm = " << Psi_2c[0].getSquareNorm() << '\n';
-    std::cout << "Psi_2c[1] square norm = " << Psi_2c[1].getSquareNorm() << '\n';
-    std::vector<mrcpp::CompFunction<3>> Psi_2c_next(2);
-    apply_Helmholtz_ZORA(mra, Psi_2c, Nabla_Psi_2c, Nabla_K_tree, Potential_tree, K_tree, K_inverted_tree, E , Psi_2c_next);
-    std::cout << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
-    std::cout << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
     
-    
-
-
-    
-    
-    
-    
-    
-    std::cout << "************************************************************" << '\n';
-    
-    
-
-    /*
-    // Print the norm of the difference
-    std::cout << "Cycle " << num_cycle << " done...  Norm of the difference = "<< norm_diff << '\n';
-    E = energy_ZORA(mra, Psi_2c, Potential_tree);
-    std::cout << "Energy = " << E << '\n';
-     
-    //std::cout << "Energy = " << E << '\n';
-    mu = std::sqrt(-2.0 * E);
-    std::cout << "mu = " << mu << '\n';
-    std::cout << "************************************************************" << '\n';
-    num_cycle++;
-    */
-
-
-
-
-
-    
-
-    
-
-    /* while (norm_diff > epsilon) {
-        
-
-
-        // Clear the trees
-        VPhi_tree.clear();
-        Phi_n_copy_tree.clear();
-        Normalized_difference_tree.clear();
-
-        // Phi_n_copy_tree = GVPhi_tree (If it's the first step then GVPhi_tree is the trial function)
-        GVPhi_tree.deep_copy(&Phi_n_copy_tree); // deep copy copies the content of the first into the second
-
-        // VPhi_tree = -2 * Potential_tree * GVPhi_tree
-        mrcpp::multiply(apply_precision, VPhi_tree, -2.0, Potential_tree, Phi_n_copy_tree); 
-        
-
-        // Initialize GVPhi_tree
-        GVPhi_tree.clear();
-
-        // GVPhi_tree = \Tilde{\Phi^{n+1}}= - 2 * G^\mu (V \Phi^{n})
-                                                                                                //mrcpp::apply(apply_precision, GVPhi_tree, Helm, VPhi_tree, maxIter, false);
-        
-        apply_Helmholtz(mu,building_precision, mra, GVPhi_tree, VPhi_tree);
-
-        //std::cout << "Energy update: " << energy_update(mra, GVPhi_tree, Phi_n_copy_tree, Potential_tree) << '\n';
-        
-
-        // Normalize the function: \Tilde{\Phi^{n+1}} --> \Phi^{n+1}
-        GVPhi_tree.normalize();
-    
-        // Normalized_difference_tree = \Phi^{n+1} - \Phi^{n}
-        mrcpp::add(apply_precision, Normalized_difference_tree, +1.0, GVPhi_tree, -1.0, Phi_n_copy_tree);
-        // norm_diff = || \Phi^{n+1} - \Phi^{n} ||
-        norm_diff = Normalized_difference_tree.getSquareNorm();
-        norm_diff = std::sqrt(norm_diff);
-
-
-
-
-
-        // Print the norm of the difference
-        std::cout << "Cycle " << num_cycle << " done...  Norm of the difference = "<< norm_diff << '\n';
-        
-        E = energy_ZORA(building_precision, mra, GVPhi_tree, Potential_tree);
-        mu = std::sqrt(-2.0 * E);
-        std::cout << "mu = " << mu << '\n';
-        std::cout << '\n';
+        //ComplexDouble E_compl = compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree);
+        //E = E_compl.real();
+        E = -0.1284100448238;
+        std::cout << "Total = " << E << '\n';
         std::cout << "************************************************************" << '\n';
-
-        // Let's print all the steps!
-        //plot.surfPlot({100,100}, GVPhi_tree, "Output_3D");
-        //system("cat Output_3D.surf >> SCF_3D_Animation.surf");
-        
-        
-        // Increment the cycle counter
-        num_cycle++;
+        std::cout  << '\n' << "Now we start the SCF cycle" << '\n';
+        std::cout << "Psi_2c[0] square norm = " << Psi_2c[0].getSquareNorm() << '\n';
+        std::cout << "Psi_2c[1] square norm = " << Psi_2c[1].getSquareNorm() << '\n';
+        apply_Helmholtz_ZORA(mra, Psi_2c, Nabla_Psi_2c, Nabla_K_tree, Potential_tree, K_tree, K_inverted_tree, E , Psi_2c_next);
+        std::cout << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
+        std::cout << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
     }
- */
+    
+
+
+    // ==================================================================================================================================
+
+
+
+    std::cout << '\n' << '\n';
+
+    // A few utilities variables for the SCF cycle
+    std::vector<mrcpp::CompFunction<3>> Psi_2c_tmp(2, mra);
+    std::vector<mrcpp::CompFunction<3>> Psi_2c_diff(2, mra);
+    int max_cycle = 15;
+
+    while (norm_diff > epsilon) {
+        num_cycle++;    
+        std::cout << "************************************************************" << '\n';
+        std::cout << "CYCLE " << num_cycle << " STARDED:" << '\n' << '\n';
+
+        // Compute the energy
+        E = compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree);
+        std::cout << '\t' << "Energy = " << E << '\n';
+
+        // Apply the Helmholtz operator
+        apply_Helmholtz_ZORA(mra, Psi_2c, Nabla_Psi_2c, Nabla_K_tree, Potential_tree, K_tree, K_inverted_tree, E , Psi_2c_next);
+
+        std::cout << "BEFORE RENORMALIZATION" << '\n';
+        std::cout << '\t' << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
+        std::cout << '\t' << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
+        // Renormalize the spinor Psi_2c_next
+        Renormalize_Spinor(Psi_2c_next);
+        std::cout << "AFTER RENORMALIZATION" << '\n';
+        std::cout << '\t' << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
+        std::cout << '\t' << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
+
+        // Compute the difference between the 2 spinors
+        mrcpp::add(Psi_2c_diff[0], 1.0, Psi_2c[0] , -1.0, Psi_2c_next[0] ,building_precision, false);
+        mrcpp::add(Psi_2c_diff[1], 1.0, Psi_2c[1] , -1.0, Psi_2c_next[1] ,building_precision, false);
+
+        std::cout << "Norm of the difference" << '\n';
+        std::cout << '\t' << "Psi_2c_diff[0] square norm = " << Psi_2c_diff[0].getSquareNorm() << '\n';
+        std::cout << '\t' << "Psi_2c_diff[1] square norm = " << Psi_2c_diff[1].getSquareNorm() << '\n';
+
+        
+        norm_diff = std::sqrt(Psi_2c_diff[0].getSquareNorm() + Psi_2c_diff[1].getSquareNorm());
+        std::cout << '\t' << "Norm of the difference = " << norm_diff << '\n';
+
+        // Update the Nabla_Psi_2c     
+        Update_Nabla_Psi(mra, Psi_2c_next, Nabla_Psi_2c);
+
+        // Update the Psi_2c
+        Psi_2c_next.swap(Psi_2c);
+        Psi_2c_next.clear();
+        Psi_2c_diff.clear();
+
+
+        if (num_cycle >= max_cycle){
+            std::cout << "The SCF cycle did not converge" << '\n';
+            break;
+        }
+        std::cout << "SCF CYCLE COMPLETED!" << '\n';
+
+    }
+ 
+    std::cout << '\n';
+    std::cout << "Your coulculation is finished, HURRAY. Here are some cute cats:"<<'\n';
+    std::cout << "=^.^=" << '\t' <<"=^.^=" << '\t' <<"=^.^=" << '\t' <<"=^.^=" << '\t' <<"=^.^=" << '\t' <<"=^.^=" << '\t' <<"=^.^=" << '\t' << '\n';
     print::footer(0, timer, 2);
     return 0;
 }
