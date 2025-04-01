@@ -16,7 +16,8 @@
 using namespace mrcpp;
 
 // DEBUG
-bool debug = false;
+bool debug = true;
+bool verbose = true;
 
 // GLOBAL VARIABLES
 int Z;
@@ -147,17 +148,15 @@ int main(int argc, char **argv) {
 
     std::function<double(const Coord<3> &x)> slater = [] (const mrcpp::Coord<3> &r) -> double {
         auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+        double lambda = std::sqrt(1. - (1/(c*c)) );
         double alpha = 1.0;
-        return exp(-alpha*R);
+        return exp(-lambda*R);
     };
 
     std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3> &r) -> double {
         return 0;
     };
     
-
-
-
 
     // 4) Let's DEFINE now the POTENTIAL for CORE ELECTRON function V_ee(r) = -1/r
     std::function<double(const Coord<3> &x)> V_ce = [] (const mrcpp::Coord<3> &r) -> double {
@@ -304,30 +303,17 @@ int main(int argc, char **argv) {
 
     std::vector<mrcpp::CompFunction<3>> Psi_2c_next(2, mra);
 
-    if (debug){
-        std::cout << "Testing the subroutines for the energy" << '\n';
-        std::cout << "Kinetic term 1 = " << compute_Term1_T_ZORA(mra, Nabla_Psi_2c, K_tree, Psi_2c) << '\n';
-        std::cout << "Kinetic term 2 = " << compute_Term2_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c) << '\n';
-        ComplexDouble kin_3 = compute_Term3_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c);
-        std::cout << "Kinetic term 3 = " << kin_3 << '\n';
-    
-        //ComplexDouble E_compl = compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree);
-        //E = E_compl.real();
-        E = -0.1284100448238;
-        std::cout << "Total = " << E << '\n';
-        std::cout << "************************************************************" << '\n';
-        std::cout  << '\n' << "Now we start the SCF cycle" << '\n';
-        std::cout << "Psi_2c[0] square norm = " << Psi_2c[0].getSquareNorm() << '\n';
-        std::cout << "Psi_2c[1] square norm = " << Psi_2c[1].getSquareNorm() << '\n';
-        apply_Helmholtz_ZORA(mra, Psi_2c, Nabla_Psi_2c, Nabla_K_tree, Potential_tree, K_tree, K_inverted_tree, E , Psi_2c_next);
-        std::cout << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
-        std::cout << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
-    }
-    
+
 
 
     // ==================================================================================================================================
 
+
+    //if (debug){
+    //    ComplexDouble Test = compute_Term3_T_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c);
+    //    std::cout << "Test = " << Test << '\n';
+    //    exit(0);
+    //}
 
 
     std::cout << '\n' << '\n';
@@ -335,7 +321,7 @@ int main(int argc, char **argv) {
     // A few utilities variables for the SCF cycle
     std::vector<mrcpp::CompFunction<3>> Psi_2c_tmp(2, mra);
     std::vector<mrcpp::CompFunction<3>> Psi_2c_diff(2, mra);
-    int max_cycle = 15;
+    int max_cycle = 3;
 
     while (norm_diff > epsilon) {
         num_cycle++;    
@@ -345,6 +331,7 @@ int main(int argc, char **argv) {
         // Compute the energy
         E = compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, Potential_tree);
         std::cout << '\t' << "Energy = " << E << '\n';
+
 
         // Apply the Helmholtz operator
         apply_Helmholtz_ZORA(mra, Psi_2c, Nabla_Psi_2c, Nabla_K_tree, Potential_tree, K_tree, K_inverted_tree, E , Psi_2c_next);
@@ -358,6 +345,12 @@ int main(int argc, char **argv) {
         std::cout << '\t' << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
         std::cout << '\t' << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
 
+        // Debug, check Psi_2c norm:
+        std::cout << "Norm of the spinor" << '\n';
+        std::cout << '\t' << "Psi_2c[0] square norm = " << Psi_2c[0].getSquareNorm() << '\n';
+        std::cout << '\t' << "Psi_2c[1] square norm = " << Psi_2c[1].getSquareNorm() << '\n';
+
+
         // Compute the difference between the 2 spinors
         mrcpp::add(Psi_2c_diff[0], 1.0, Psi_2c[0] , -1.0, Psi_2c_next[0] ,building_precision, false);
         mrcpp::add(Psi_2c_diff[1], 1.0, Psi_2c[1] , -1.0, Psi_2c_next[1] ,building_precision, false);
@@ -368,15 +361,16 @@ int main(int argc, char **argv) {
 
         
         norm_diff = std::sqrt(Psi_2c_diff[0].getSquareNorm() + Psi_2c_diff[1].getSquareNorm());
-        std::cout << '\t' << "Norm of the difference = " << norm_diff << '\n';
+        std::cout << '\n' << '\n' << '\t' << "[Norm of the difference = " << norm_diff << "]" << '\n';
 
         // Update the Nabla_Psi_2c     
         Update_Nabla_Psi(mra, Psi_2c_next, Nabla_Psi_2c);
 
         // Update the Psi_2c
-        Psi_2c_next.swap(Psi_2c);
+        Psi_2c.swap(Psi_2c_next);
+        //Psi_2c_next.swap(Psi_2c);
         Psi_2c_next.clear();
-        Psi_2c_diff.clear();
+        //Psi_2c_diff.clear();
 
 
         if (num_cycle >= max_cycle){
