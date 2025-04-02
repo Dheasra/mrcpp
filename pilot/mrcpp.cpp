@@ -16,8 +16,8 @@
 using namespace mrcpp;
 
 // DEBUG
-bool debug = true;
-bool verbose = true;
+bool debug = false;
+bool verbose = false;
 
 // GLOBAL VARIABLES
 int Z;
@@ -149,8 +149,8 @@ int main(int argc, char **argv) {
     std::function<double(const Coord<3> &x)> slater = [] (const mrcpp::Coord<3> &r) -> double {
         auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
         double lambda = std::sqrt(1. - (1/(c*c)) );
-        double alpha = 1.0;
-        return exp(-lambda*R);
+        double alpha = 0.3;
+        return exp(-alpha*R);
     };
 
     std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3> &r) -> double {
@@ -320,8 +320,9 @@ int main(int argc, char **argv) {
 
     // A few utilities variables for the SCF cycle
     std::vector<mrcpp::CompFunction<3>> Psi_2c_tmp(2, mra);
-    std::vector<mrcpp::CompFunction<3>> Psi_2c_diff(2, mra);
-    int max_cycle = 3;
+    mrcpp::CompFunction<3> Psi_2c_diff_top(mra);
+    mrcpp::CompFunction<3> Psi_2c_diff_bottom(mra);
+    int max_cycle = 15;
 
     while (norm_diff > epsilon) {
         num_cycle++;    
@@ -352,25 +353,29 @@ int main(int argc, char **argv) {
 
 
         // Compute the difference between the 2 spinors
-        mrcpp::add(Psi_2c_diff[0], 1.0, Psi_2c[0] , -1.0, Psi_2c_next[0] ,building_precision, false);
-        mrcpp::add(Psi_2c_diff[1], 1.0, Psi_2c[1] , -1.0, Psi_2c_next[1] ,building_precision, false);
+        mrcpp::add(Psi_2c_diff_top, 1.0, Psi_2c[0] , -1.0, Psi_2c_next[0] ,building_precision, false);
+        mrcpp::add(Psi_2c_diff_bottom, 1.0, Psi_2c[1] , -1.0, Psi_2c_next[1] ,building_precision, false);
 
         std::cout << "Norm of the difference" << '\n';
-        std::cout << '\t' << "Psi_2c_diff[0] square norm = " << Psi_2c_diff[0].getSquareNorm() << '\n';
-        std::cout << '\t' << "Psi_2c_diff[1] square norm = " << Psi_2c_diff[1].getSquareNorm() << '\n';
+        std::cout << '\t' << "Psi_2c_diff[0] square norm = " << Psi_2c_diff_top.getSquareNorm() << '\n';
+        std::cout << '\t' << "Psi_2c_diff[1] square norm = " << Psi_2c_diff_bottom.getSquareNorm() << '\n';
 
         
-        norm_diff = std::sqrt(Psi_2c_diff[0].getSquareNorm() + Psi_2c_diff[1].getSquareNorm());
+        norm_diff = std::sqrt(Psi_2c_diff_top.getSquareNorm() + Psi_2c_diff_bottom.getSquareNorm());
         std::cout << '\n' << '\n' << '\t' << "[Norm of the difference = " << norm_diff << "]" << '\n';
 
         // Update the Nabla_Psi_2c     
         Update_Nabla_Psi(mra, Psi_2c_next, Nabla_Psi_2c);
 
+
+    
         // Update the Psi_2c
         Psi_2c.swap(Psi_2c_next);
         //Psi_2c_next.swap(Psi_2c);
         Psi_2c_next.clear();
         //Psi_2c_diff.clear();
+
+
 
 
         if (num_cycle >= max_cycle){

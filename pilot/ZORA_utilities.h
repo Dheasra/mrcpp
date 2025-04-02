@@ -417,7 +417,7 @@ double compute_energy_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vec
 
 
 
-void compute_term_A_Propagator(MultiResolutionAnalysis<3> &MRA, double E_n, std::vector<mrcpp::CompFunction<3>> &Psi_in, CompFunction<3> &V,CompFunction<3> &term_A_top,CompFunction<3> &term_A_bottom, std::vector<mrcpp::CompFunction<3>> &V_Psi){
+void compute_term_A_Propagator(MultiResolutionAnalysis<3> &MRA, double E_n, std::vector<mrcpp::CompFunction<3>> &Psi_in, CompFunction<3> &V,CompFunction<3> &term_A_top,CompFunction<3> &term_A_bottom){
     double const_factor = -E_n / (c*c);
     
     std::cout << "--------------------------------------------------" << '\n';
@@ -429,13 +429,6 @@ void compute_term_A_Propagator(MultiResolutionAnalysis<3> &MRA, double E_n, std:
 
     mrcpp::multiply(building_precision, term_A_top, 1.0, V, Psi_in[0]);
     mrcpp::multiply(building_precision, term_A_bottom, 1.0, V, Psi_in[1]);
-
-    V_Psi.push_back(term_A_top);
-    V_Psi.push_back(term_A_bottom);
-    std::cout << " Output in A BEFORE RESCALING:" << '\n';
-    std::cout << "  V_Psi[0] = " << V_Psi[0].getSquareNorm() << '\n';
-    std::cout << "  V_Psi[1] = " << V_Psi[1].getSquareNorm() << '\n' << '\n';
-
     term_A_top.rescale(const_factor);
     term_A_bottom.rescale(const_factor);
 
@@ -445,6 +438,42 @@ void compute_term_A_Propagator(MultiResolutionAnalysis<3> &MRA, double E_n, std:
 void compute_term_B_Propagator(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::CompFunction<3>> &Psi_in, std::vector<std::vector<mrcpp::CompFunction<3> *>> &Nabla_Psi_2c, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree , CompFunction<3> &K_tree, CompFunction<3> &K_inverse, CompFunction<3> &term_B_top,CompFunction<3> &term_B_bottom){
     std::vector<mrcpp::CompFunction<3>> Nabla_K_Nabla_Psi_top(3, MRA);
     std::vector<mrcpp::CompFunction<3>> Nabla_K_Nabla_Psi_bottom(3, MRA);
+
+    // EXPLICIT RUTE
+    mrcpp::CompFunction<3> DOT_TOP_x(MRA); // ----> X component for the dot product
+    mrcpp::CompFunction<3> DOT_TOP_y(MRA); // ----> Y component for the dot product
+    mrcpp::CompFunction<3> DOT_TOP_z(MRA); // ----> Z component for the dot product
+    mrcpp::CompFunction<3> DOT_BOTTOM_x(MRA); // ----> X component for the dot product
+    mrcpp::CompFunction<3> DOT_BOTTOM_y(MRA); // ----> Y component for the dot product
+    mrcpp::CompFunction<3> DOT_BOTTOM_z(MRA); // ----> Z component for the dot product
+
+
+    mrcpp::multiply(DOT_TOP_x, *Nabla_K_tree[0], *Nabla_Psi_2c[0][0],building_precision, false, false, false);
+    mrcpp::multiply(DOT_TOP_y, *Nabla_K_tree[1], *Nabla_Psi_2c[0][1],building_precision, false, false, false);
+    mrcpp::multiply(DOT_TOP_z, *Nabla_K_tree[2], *Nabla_Psi_2c[0][2],building_precision, false, false, false);
+    mrcpp::multiply(DOT_BOTTOM_x, *Nabla_K_tree[0], *Nabla_Psi_2c[1][0],building_precision, false, false, false);
+    mrcpp::multiply(DOT_BOTTOM_y, *Nabla_K_tree[1], *Nabla_Psi_2c[1][1],building_precision, false, false, false);
+    mrcpp::multiply(DOT_BOTTOM_z, *Nabla_K_tree[2], *Nabla_Psi_2c[1][2],building_precision, false, false, false);
+
+    // Now i sum the y and z components
+    mrcpp::CompFunction<3> DOT_TOP_yz(MRA);
+    mrcpp::CompFunction<3> DOT_BOTTOM_yz(MRA);
+    mrcpp::CompFunction<3> DOT_TOP(MRA);
+    mrcpp::CompFunction<3> DOT_BOTTOM(MRA);
+
+    mrcpp::add(DOT_TOP_yz, 1.0, DOT_TOP_y, 1.0, DOT_TOP_z,building_precision, false);
+    mrcpp::add(DOT_BOTTOM_yz, 1.0, DOT_BOTTOM_y, 1.0, DOT_BOTTOM_z,building_precision, false);
+
+    // Finally i sum the x component to the yz component to the total SOC
+    mrcpp::add(DOT_TOP, 1.0, DOT_TOP_x, 1.0, DOT_TOP_yz,building_precision, false);
+    mrcpp::add(DOT_BOTTOM, 1.0, DOT_BOTTOM_x, 1.0, DOT_BOTTOM_yz,building_precision, false);
+
+    // Multiply by K_inverse
+    mrcpp::multiply(term_B_top, K_inverse, DOT_TOP,building_precision, false, false, false);
+    mrcpp::multiply(term_B_bottom, K_inverse, DOT_BOTTOM,building_precision, false, false, false);
+
+/* 
+With this i was getting : term_B_top = 7.442213823661e-09	term_B_bottom = 0.000000000000e+00
 
     for (int i=0;i<3;i++){
         mrcpp::multiply(Nabla_K_Nabla_Psi_top[i], *Nabla_K_tree[i], *Nabla_Psi_2c[0][i],building_precision, false, false, false);   // <---- Here we dereference the pointer
@@ -478,7 +507,7 @@ void compute_term_B_Propagator(MultiResolutionAnalysis<3> &MRA, std::vector<mrcp
 
     // Finally i sum the x component to the yz component to the total SOC
     mrcpp::add(term_B_top, 1.0, Top_x, 1.0, Top_yz,building_precision, false);
-    mrcpp::add(term_B_bottom, 1.0, Bottom_x, 1.0, Bottom_yz,building_precision, false);
+    mrcpp::add(term_B_bottom, 1.0, Bottom_x, 1.0, Bottom_yz,building_precision, false); */
 
 }
 
@@ -526,12 +555,25 @@ void compute_term_C_Propagator(MultiResolutionAnalysis<3> &MRA, std::vector<std:
 }
 
 
-void compute_term_D_Propagator(std::vector<mrcpp::CompFunction<3>> &V_Psi , CompFunction<3> &K_inverse, CompFunction<3> &term_D_top,CompFunction<3> &term_D_bottom){
+void compute_term_D_Propagator(MultiResolutionAnalysis<3> &MRA,std::vector<mrcpp::CompFunction<3>> &Psi_in ,CompFunction<3> &V , CompFunction<3> &K_inverse, CompFunction<3> &term_D_top,CompFunction<3> &term_D_bottom){
     // Term_D = (-2m/K) * V * Psi
-    mrcpp::multiply(building_precision, term_D_top , -2*m, K_inverse,  V_Psi[0]);
-    mrcpp::multiply(building_precision, term_D_bottom ,  -2*m, K_inverse, V_Psi[1]);
-    //mrcpp::multiply(building_precision, K_inverse, -2*m, term_D_top , V_Psi[0]);
-    //mrcpp::multiply(building_precision, K_inverse, -2*m, term_D_bottom , V_Psi[1]);
+    double factor = -2*m;
+    CompFunction<3> V_Psi_t(MRA);
+    CompFunction<3> V_Psi_b(MRA);
+
+    mrcpp::multiply(building_precision, V_Psi_t, factor, V, Psi_in[0]);
+    mrcpp::multiply(building_precision, V_Psi_b, factor, V, Psi_in[1]);
+    
+    std::cout << "NORM INPUT:" << '\n';
+    std::cout << "V_Psi_top = " << V_Psi_t.getSquareNorm() << '\n';
+    std::cout << "V_Psi_bottom = " << V_Psi_b.getSquareNorm() << '\n';
+    
+    mrcpp::multiply(building_precision, term_D_top ,   1, K_inverse,  V_Psi_t);
+    mrcpp::multiply(building_precision, term_D_bottom ,    1, K_inverse, V_Psi_b);
+    //mrcpp::multiply(building_precision, K_inverse, 1, term_D_top , V_Psi[0]);
+    //mrcpp::multiply(building_precision, K_inverse, 1, term_D_bottom , V_Psi[1]);
+    term_D_top.rescale(factor);
+    term_D_bottom.rescale(factor);
 }
 
 
@@ -578,9 +620,9 @@ void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::Co
     CompFunction<3> term_D_bottom(MRA);
 
     // Compute the term A will also evaluate the potential energy times the wavefunction, we'll need it later in term d.
-    std::vector<mrcpp::CompFunction<3>> V_Psi;
+    
     //std::cout << "Now computing term A" << '\n';
-    compute_term_A_Propagator(MRA, E_n, Psi_in, V, term_A_top, term_A_bottom, V_Psi);
+    compute_term_A_Propagator(MRA, E_n, Psi_in, V, term_A_top, term_A_bottom);
 
     // Compute the term B
     //std::cout << "Now computing term B" << '\n';
@@ -592,7 +634,7 @@ void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::Co
 
     // Compute the term D
     //std::cout << "Now computing term D" << '\n';
-    compute_term_D_Propagator(V_Psi, K_inverse, term_D_top, term_D_bottom);
+    compute_term_D_Propagator(MRA, Psi_in, V, K_inverse, term_D_top, term_D_bottom);
 
     // Now we sum all the terms, we have a total of 4 terms to sum. We'll take them by pairs and sum them
     CompFunction<3> first_pair_top(MRA);
@@ -626,8 +668,19 @@ void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::Co
     std::vector<mrcpp::CompFunction<3>> Psi_to_be_convoluted(2,MRA);
 
     //std::cout << "Now computing the final addition" << '\n';
-    mrcpp::add(Psi_to_be_convoluted[0], 1.0, first_pair_top, 1.0, second_pair_top, building_precision, false);
-    mrcpp::add(Psi_to_be_convoluted[1], 1.0, first_pair_bottom, 1.0, second_pair_bottom, building_precision, false);
+    mrcpp::CompFunction<3> tmp1(MRA);
+    mrcpp::CompFunction<3> tmp2(MRA);
+
+//    mrcpp::add(Psi_to_be_convoluted[0], 1.0, first_pair_top, 1.0, second_pair_top, building_precision, false);
+//    mrcpp::add(Psi_to_be_convoluted[1], 1.0, first_pair_bottom, 1.0, second_pair_bottom, building_precision, false);
+
+    mrcpp::add(tmp1, 1.0, first_pair_top, 1.0, second_pair_top, building_precision, false);
+    mrcpp::add(tmp2, 1.0, first_pair_bottom, 1.0, second_pair_bottom, building_precision, false);
+
+
+
+    Psi_to_be_convoluted[0] = tmp1;
+    Psi_to_be_convoluted[1] = tmp2;
 
     // LAST DEBUG
     std::cout << '\n' << "Norm of the components after the final addition" << '\n';
@@ -637,6 +690,10 @@ void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::Co
 
     // Now we apply the Helmholtz operator
     std::cout << "Now applying the Helmholtz operator" << '\n';
+
+
+
+
     mrcpp::apply(building_precision, Psi_out[0], Helm, Psi_to_be_convoluted[0]);
     mrcpp::apply(building_precision, Psi_out[1], Helm, Psi_to_be_convoluted[1]);
 
