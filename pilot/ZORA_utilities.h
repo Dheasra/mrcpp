@@ -34,9 +34,6 @@
 // IN principle, one could skip the step of recomputing all the gradient of the \Psi * K bu simpli adding \Nabla \Psi  K + \Psi  \Nabla K, but this would be longer, tho requiring less memory
 ComplexDouble compute_Term1_T_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vector<mrcpp::CompFunction<3>*>> &Nabla_Psi_2c, mrcpp::CompFunction<3> &K_tree,  std::vector<mrcpp::CompFunction<3>> &Psi_2c){
     // Nabla(\Psi K) = \Nabla \Psi  K + \Psi  \Nabla K
-
-
-
     CompFunction<3> Psi_t_K(MRA);
     CompFunction<3> Psi_b_K(MRA);
 
@@ -72,7 +69,7 @@ ComplexDouble compute_Term1_T_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<
     // Operatr ABGV
     mrcpp::ABGVOperator<3> D(MRA, 0.0, 0.0);
 
-    // Gradient of Psi_top * K
+    // Gradient of | Psi_top * K >
     auto Nabla_Psi_t_K = mrcpp::gradient(D,Psi_t_K);
     // Gradient of Psi_bottom * K
     auto Nabla_Psi_b_K = mrcpp::gradient(D,Psi_b_K);
@@ -97,12 +94,33 @@ ComplexDouble compute_Term2_T_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<
     std::vector<mrcpp::CompFunction<3>> Nabla_K_Nabla_Psi_bottom(3, MRA);
 
     // \Naabla(K) * |\Nabla(\Psi)>
+    /*
     for (int i=0;i<3;i++){
         mrcpp::multiply(Nabla_K_Nabla_Psi_top[i], *Nabla_K_tree[i], *Nabla_Psi_2c[0][i],building_precision, false, false, false);   // <---- Here we dereference the pointer
     }
     for (int i=0;i<3;i++){
         mrcpp::multiply(Nabla_K_Nabla_Psi_bottom[i], *Nabla_K_tree[i], *Nabla_Psi_2c[1][i],building_precision, false, false, false);   // <---- Here we dereference the pointer
     }
+
+    */
+
+    CompFunction<3> Nabla_K_Nabla_Psi_XTOP(MRA);
+    CompFunction<3> Nabla_K_Nabla_Psi_YTOP(MRA);
+    CompFunction<3> Nabla_K_Nabla_Psi_ZTOP(MRA);
+    CompFunction<3> Nabla_K_Nabla_Psi_XBOTTOM(MRA);
+    CompFunction<3> Nabla_K_Nabla_Psi_YBOTTOM(MRA);
+    CompFunction<3> Nabla_K_Nabla_Psi_ZBOTTOM(MRA);
+
+    // Let's do explicitely what the loops do:
+    mrcpp::multiply(Nabla_K_Nabla_Psi_XTOP, *Nabla_K_tree[0], *Nabla_Psi_2c[0][0],building_precision, false, false, false);   
+    mrcpp::multiply(Nabla_K_Nabla_Psi_YTOP, *Nabla_K_tree[1], *Nabla_Psi_2c[0][1],building_precision, false, false, false);
+    mrcpp::multiply(Nabla_K_Nabla_Psi_ZTOP, *Nabla_K_tree[2], *Nabla_Psi_2c[0][2],building_precision, false, false, false);
+    mrcpp::multiply(Nabla_K_Nabla_Psi_XBOTTOM, *Nabla_K_tree[0], *Nabla_Psi_2c[1][0],building_precision, false, false, false);
+    mrcpp::multiply(Nabla_K_Nabla_Psi_YBOTTOM, *Nabla_K_tree[1], *Nabla_Psi_2c[1][1],building_precision, false, false, false);
+    mrcpp::multiply(Nabla_K_Nabla_Psi_ZBOTTOM, *Nabla_K_tree[2], *Nabla_Psi_2c[1][2],building_precision, false, false, false);
+
+    
+
 
     // Debug
     if (debug){
@@ -117,8 +135,12 @@ ComplexDouble compute_Term2_T_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<
     }
 
 
-    ComplexDouble Top_contribution  = dot(Psi_2c[0],Nabla_K_Nabla_Psi_top[0]) + dot(Psi_2c[0],Nabla_K_Nabla_Psi_top[1]) + dot(Psi_2c[0],Nabla_K_Nabla_Psi_top[2]);
-    ComplexDouble Bottom_contribution  = dot(Psi_2c[1],Nabla_K_Nabla_Psi_bottom[0]) + dot(Psi_2c[1],Nabla_K_Nabla_Psi_bottom[1]) + dot(Psi_2c[1],Nabla_K_Nabla_Psi_bottom[2]);
+    //ComplexDouble Top_contribution  = dot(Psi_2c[0],Nabla_K_Nabla_Psi_top[0]) + dot(Psi_2c[0],Nabla_K_Nabla_Psi_top[1]) + dot(Psi_2c[0],Nabla_K_Nabla_Psi_top[2]);
+    //ComplexDouble Bottom_contribution  = dot(Psi_2c[1],Nabla_K_Nabla_Psi_bottom[0]) + dot(Psi_2c[1],Nabla_K_Nabla_Psi_bottom[1]) + dot(Psi_2c[1],Nabla_K_Nabla_Psi_bottom[2]);
+
+    ComplexDouble Top_contribution  = dot(Psi_2c[0],Nabla_K_Nabla_Psi_XTOP) + dot(Psi_2c[0],Nabla_K_Nabla_Psi_YTOP) + dot(Psi_2c[0],Nabla_K_Nabla_Psi_ZTOP);
+    ComplexDouble Bottom_contribution  = dot(Psi_2c[1],Nabla_K_Nabla_Psi_XBOTTOM) + dot(Psi_2c[1],Nabla_K_Nabla_Psi_YBOTTOM) + dot(Psi_2c[1],Nabla_K_Nabla_Psi_ZBOTTOM);
+
 
     return Top_contribution + Bottom_contribution;
 }
@@ -156,38 +178,28 @@ void Cross_Product_Compfunct( std::vector<mrcpp::CompFunction<3>*> &Cross , std:
 
 
 void compute_sigma_cdot_spinor(MultiResolutionAnalysis<3> &MRA  , std::vector<mrcpp::CompFunction<3>*> &Input_TOP, std::vector<mrcpp::CompFunction<3>*> &Input_BOTTOM, CompFunction<3> &SOC_Psi_t, CompFunction<3> &SOC_Psi_b){
-
-    // I'll devide the xyz components of the top and bottoom components of the spinor in 3 spinors, one for each direction
-    std::vector<mrcpp::CompFunction<3>> Spinor_component_x(2, MRA); // <-- 2 component of X
-    std::vector<mrcpp::CompFunction<3>> Spinor_component_y(2, MRA); // <-- 2 component of Y
-    std::vector<mrcpp::CompFunction<3>> Spinor_component_z(2, MRA); // <-- 2 component of Z
-
-    Spinor_component_x[0] = *Input_TOP[0];
-    Spinor_component_x[1] = *Input_BOTTOM[0];
-
-    Spinor_component_y[0] = *Input_TOP[1];
-    Spinor_component_y[1] = *Input_BOTTOM[1];
-
-    Spinor_component_z[0] = *Input_TOP[2];
-    Spinor_component_z[1] = *Input_BOTTOM[2];
-
-
-    // Now i compute the scalar product between the rotor and the sigma matrix vector
-    // I'll do one by one
-    // Compute SOC_i as the matrix-vector product of sigma_i and Spinor_component_i
-    std::vector<mrcpp::CompFunction<3>*> SOC_x(2, new mrcpp::CompFunction<3>(MRA));
-    std::vector<mrcpp::CompFunction<3>*> SOC_y(2, new mrcpp::CompFunction<3>(MRA));
-    std::vector<mrcpp::CompFunction<3>*> SOC_z(2, new mrcpp::CompFunction<3>(MRA));
-
     // In general, for each matrix vector(spinor) multiplication we need 4 scalar multiplication and 2 additions
+    /*
+    * SOC = sigma \cdot \binom{\vec{T}}{\vec{B}} 
+    * This results in a 2 component spinor with the following operations:
+    * [SOC TOP] = [B_x - i * B_y + T_z]
+    * [SOC BOT] = [T_x + i * T_y - B_z]
+    * 
+    */
 
     std::vector<mrcpp::CompFunction<3>> SOC_yz(2, MRA); // This is the sum of the y and z components, temporary, to be used in the final sum
-    mrcpp::add(SOC_yz[0], ComplexDouble(0.,-1.) , *Input_BOTTOM[1]   ,   +1.0, *Input_TOP[2],building_precision, false);
-    mrcpp::add(SOC_yz[1], ComplexDouble(1.0,0) , *Input_TOP[1]       ,   -1.0, *Input_BOTTOM[2],building_precision, false);
+    // Thus:
+    // SOC_yz TOP = - i * B_y + T_z
+    // SOC_yz BOT = + i * T_y - B_z
+
+    mrcpp::add(SOC_yz[0], ComplexDouble(0.,-1.) , *Input_BOTTOM[1] , +1.0, *Input_TOP[2]    , building_precision, false);
+    mrcpp::add(SOC_yz[1], ComplexDouble(0.,+1.) , *Input_TOP[1]    , -1.0, *Input_BOTTOM[2] , building_precision, false);
 
     // Finally i sum the x component to the yz component to the total SOC
-    mrcpp::add(SOC_Psi_t, 1.0, *Input_BOTTOM[0], 1.0, SOC_yz[0],building_precision, false);
-    mrcpp::add(SOC_Psi_b, 1.0, *Input_TOP[0], 1.0, SOC_yz[1],building_precision, false);
+    // SOC TOP = B_x + SOC_yz TOP
+    // SOC BOT = T_x + SOC_yz BOT
+    mrcpp::add(SOC_Psi_t, +1.0, *Input_BOTTOM[0], +1.0, SOC_yz[0],building_precision, false);
+    mrcpp::add(SOC_Psi_b, +1.0, *Input_TOP[0], +1.0, SOC_yz[1],building_precision, false);
 
     if (debug){
         std::cout << "> NOW COMPUTING THE SIGMA CDOT SPINOR" << '\n';

@@ -21,7 +21,8 @@ bool verbose = false;
 
 // GLOBAL VARIABLES
 int Z;
-double c = 137.035999139;
+double c = 137.035999146; // --> This is the speed of light in atomic units
+//double c = 137;
 double m = 1.0;
 int n_electrons;
 
@@ -106,7 +107,7 @@ int main(int argc, char **argv) {
     // ==================================================================================================================================
 
     // 1) Build the Box and MRA
-    std::array<int,2> box = {-15,15};
+    std::array<int,2> box = {-30,30};
     mrcpp::BoundingBox<3> bb(box);
     mrcpp::MultiResolutionAnalysis mra(bb, order, MaxLevel);
     // Also, we create the trees for each function we'll be dealing with
@@ -142,13 +143,13 @@ int main(int argc, char **argv) {
     std::function<double(const Coord<3> &x)> slater = [] (const mrcpp::Coord<3> &r) -> double {
         auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
         double lambda = std::sqrt(1. - (1/(c*c)) );
-        double alpha = 0.95;
+        double alpha = 1;
         return exp(-alpha*R);
     };
 
     // Define another function that is zero everywhere
     std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3> &r) -> double {
-        return 0;
+        return 0.0;
     };
     
 
