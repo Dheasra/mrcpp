@@ -548,6 +548,25 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
     }
 }
 
+/** @brief out = conj(inp) * inp
+ *
+ *  Note that output is always real
+ *
+ */
+void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec) {
+    multiply(prec, out, 1.0, inp, inp, -1, false, false, true);
+    if (out.iscomplex()) {
+        // copy onto real components
+        for (int i = 0; i < out.Ncomp(); i++) {
+            out.CompD[i] = out.CompC[i]->Real();
+            delete out.CompD[i];
+        }
+        out.func_ptr->isreal = 1;
+        out.func_ptr->iscomplex = 0;
+    }
+}
+
+
 /** @brief out = inp_a * inp_b
  *
  */
@@ -2600,6 +2619,7 @@ template <int D> void orthogonalize(double prec, CompFunction<D> &Bra, CompFunct
     }
 }
 
+void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec);
 template ComplexDouble dot(CompFunction<3> bra, CompFunction<3> ket);
 template void project(CompFunction<3> &out, RepresentableFunction<3, double> &f, double prec);
 template void project(CompFunction<3> &out, RepresentableFunction<3, ComplexDouble> &f, double prec);
