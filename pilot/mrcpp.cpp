@@ -17,7 +17,7 @@ using namespace mrcpp;
 
 // DEBUG
 bool debug = false;
-bool verbose = false;
+bool verbose = true;
 
 // GLOBAL VARIABLES
 int Z =2;
@@ -38,8 +38,10 @@ int num_cycle =  0;     //    -> SCF cycle counter
 
 #include "my_utilities.h"
 //#include "ZORA_utilities.h"
+
 #include "He_atom_ZORA_utils.h"
 #include "He_atom_utils.h"
+#include "Updating_var_ZORA.h"
 
 /*
  * ==================================================================================================================================
@@ -209,6 +211,12 @@ int main(int argc, char **argv) {
     }
     
 
+
+    std::cout << '\n'<< " Psi_trial (top) square norm = " << Psi_2c[0].getSquareNorm() << '\n';
+    std::cout << '\n'<< " Psi_trial (bottom) square norm = " << Psi_2c[1].getSquareNorm() << '\n' << '\n';
+
+
+   
       /*
      *-----------------------------------
      *-----------------------------------
@@ -250,26 +258,34 @@ int main(int argc, char **argv) {
     mrcpp::CompFunction<3> Psi_2c_diff_bottom(mra);             // -> This will hold the difference between the 2 spinors for the BOTTOM component
     
     
-    int max_cycle = 15;
+    int max_cycle = 4;
     
 
     FunctionTree<3> K_real(mra);
+
+    std::cout << "Initializing the SCF cycle...";
+    mrcpp::PoissonOperator P(mra, building_precision);
     
-    Update_SCF_Variables(mra, D, Psi_2c, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, Coulomb_tree, K_real);
-    
+    /* CompFunction<3> Tmp(mra);
+    mrcpp::multiply(building_precision, Tmp, 1.0, Psi_2c[0], Psi_2c[0],-1, false, false, false);
+    std::cout << "Tmp = " << Tmp.getSquareNorm() << '\n';
+    std::cout << "Tmp.isreal = " << Tmp.isreal() << '\n'; 
+    std::cout << "Tmp.iscomplex = " << Tmp.iscomplex() << '\n';
+ */
+    Update_SCF_Variables2(mra, D, Psi_2c, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, Coulomb_tree, K_real, P);
+    std::cout << " done!" << '\n' << '\n';
  // ==================================================================================================================================
 
+ 
 
     std::vector<double> E_values;
     std::vector<double> norm_diff_values;
     std::vector<int> cycle_values;
 
 
-    //compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, core_el_tree, Coulomb_tree);
 
-    
 
-    
+
 
     while (norm_diff > epsilon) {
         num_cycle++;    
@@ -304,6 +320,7 @@ int main(int argc, char **argv) {
         }
         // Renormalize the spinor Psi_2c_next
         Renormalize_Spinor(Psi_2c_next);
+        debug = true;
         if (debug){
         std::cout << "AFTER RENORMALIZATION" << '\n';
         std::cout << '\t' << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
@@ -314,6 +331,7 @@ int main(int argc, char **argv) {
         std::cout << '\t' << "Psi_2c[0] square norm = " << Psi_2c[0].getSquareNorm() << '\n';
         std::cout << '\t' << "Psi_2c[1] square norm = " << Psi_2c[1].getSquareNorm() << '\n';
         }
+        debug = false;
 
 
         if (verbose) {
@@ -340,14 +358,22 @@ int main(int argc, char **argv) {
             std::cout << "$ UPDATING THE VARIABLES FOR THE NEXT ITERATION..." << '\n' << '\n';
         }
         // Update the all the new variables for the next iteration
-        Nabla_K_tree.clear();
-        Nabla_Psi_2c.clear();
-        Nabla_Psi_2c.resize(2, std::vector<mrcpp::CompFunction<3>*>(3, new mrcpp::CompFunction<3>(mra))); // -> This is the tree that will hold the gradient of Psi_2c
-        Update_SCF_Variables(mra, D, Psi_2c_next, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, Coulomb_tree, K_real);
+        //Nabla_K_tree.clear();
+        //Nabla_Psi_2c.clear();
+        //Nabla_Psi_2c.resize(2, std::vector<mrcpp::CompFunction<3>*>(3, new mrcpp::CompFunction<3>(mra))); // -> This is the tree that will hold the gradient of Psi_2c
+
+        
+       
+        std::cout << "SCF CYCLE COMPLETED!" << '\n' << '\n';
+
+
+        
+        Update_SCF_Variables2(mra, D, Psi_2c_next, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, Coulomb_tree, K_real, P);
+        std::cout<< "SCF variables updated!" << '\n' << '\n';
         // Update the Psi_2c
         Psi_2c.swap(Psi_2c_next);
         //Psi_2c_next.swap(Psi_2c);
-        Psi_2c_next.clear();
+        //Psi_2c_next.clear();
         //Psi_2c_diff.clear();
 
         // Store all the values for the SCF cycle
@@ -355,6 +381,7 @@ int main(int argc, char **argv) {
         norm_diff_values.push_back(norm_diff);
         cycle_values.push_back(num_cycle);
 
+        std::cout << "Last cleanuops, MOVING ON TO THE NEXT CYCLE!" << '\n' << '\n';
 
 
 
@@ -363,7 +390,8 @@ int main(int argc, char **argv) {
             print::footer(0, timer, 2);
             exit(0);
         }
-        std::cout << "SCF CYCLE COMPLETED!" << '\n' << '\n';
+        
+
 
     }
 
