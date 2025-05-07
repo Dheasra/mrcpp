@@ -1143,10 +1143,10 @@
  template <int D, typename T> FunctionTree<D, double> *FunctionTree<D, T>::Real() {
      FunctionTree<D, double> *out = new FunctionTree<D, double>(this->getMRA(), this->getName());
      out->setZero();
- #pragma omp parallel num_threads(mrcpp_get_num_threads())
+ //#pragma omp parallel num_threads(mrcpp_get_num_threads())
      {
          int nNodes = this->getNEndNodes();
- #pragma omp for schedule(guided)
+ //#pragma omp for schedule(guided)
          for (int n = 0; n < nNodes; n++) {
              MWNode<D, T> &inp_node = *this->endNodeTable[n];
              MWNode<D, double> &out_node = out->getNode(inp_node.getNodeIndex(), true);
