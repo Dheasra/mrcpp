@@ -19,7 +19,7 @@
 
 
 void make_density_local(CompFunction<3> &out, CompFunction<3> &inp, MultiResolutionAnalysis<3> &MRA, double prec) {
-    std::cout << '\t' << "make_density_local started, multiplying..." << '\n';
+    //std::cout << '\t' << "make_density_local started, multiplying..." << '\n';
 
     CompFunction<3> inp_2(MRA);
     deep_copy(inp_2, inp);
@@ -43,16 +43,10 @@ void make_density_local(CompFunction<3> &out, CompFunction<3> &inp, MultiResolut
         }
  
         out.CompD[0] = out_tree_REAL;
-        //std::cout << '\t' << "out.CompD[0] =" << out.CompD[0]<< '\n' << '\n';
         out.CompC[0] = nullptr; // Set the pointer to nullptr to avoid double delete
-        //std::cout << '\t' << "out.CompD[0] after the delete =" << out.CompD[0]<< '\n';
 
-
-        
-        
         out.func_ptr->isreal = 1;
         out.func_ptr->iscomplex = 0;
-        std::cout << '\t' << "make_density_local completed." << '\n'<< '\n';
     }
 }
 

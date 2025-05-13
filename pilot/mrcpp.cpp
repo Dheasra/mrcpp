@@ -42,6 +42,7 @@ int num_cycle =  0;     //    -> SCF cycle counter
 #include "He_atom_ZORA_utils.h"
 #include "He_atom_utils.h"
 #include "Updating_var_ZORA.h"
+#include "Smeared_potential.h"
 //#include "ZORA_utilities.h"
 
 /*
@@ -86,7 +87,7 @@ int main(int argc, char **argv) {
     // Set the charge as neutra by:
     Z = 2;
     n_electrons = 2; // --> As we are dealing with the H type atom
-    Relativity = static_cast<int>(parameters["Relativity"]);
+    
 
     std::cout << "Parameters read from file: " << '\n' << '\n';
     std::cout << " Order =" << '\t'<< '\t' << order << '\n';
@@ -95,16 +96,16 @@ int main(int argc, char **argv) {
     std::cout << " Epsilon =" << '\t'<< '\t' << epsilon << '\n';
     std::cout << " Z =" << '\t'<< '\t' << '\t' << Z << '\n';
     std::cout << " Number of electrons =" << '\t' << n_electrons << '\n';
-    if (Relativity == 0){
-        std::cout << " Relativity ="<< '\t'<< '\t' <<"Non-Relativistic" << '\n';
-    }
-    else if (Relativity == 1){
-        std::cout << " Relativity =" << '\t'<< '\t' << "ZORA" << '\n';
-    }
-    else{
-        std::cout << " Relativity =" << '\t'<< '\t' << "not supported" << '\n';
-        return 0;
-    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     std::cout << '\n' << '\n' << "************************************************************" << '\n';
     
 
@@ -158,6 +159,8 @@ int main(int argc, char **argv) {
         double alpha = 1.69;
         return exp(-alpha*R);
     };
+    mrcpp::CompFunction He_NR_Solution(mra);
+    mrcpp::project(He_NR_Solution, slater, building_precision);
 
     // Define another function that is zero everywhere
     std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3> &r) -> double {
@@ -171,8 +174,18 @@ int main(int argc, char **argv) {
         return -Z/R;
     };
 
+    // Here is the smeared potential
+    // Define the smeared potential
+    std::function<double(const Coord<3> &x)> smeared_potential = [=] (const mrcpp::Coord<3> &r) -> double {
+        auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+        return -SmearedPotential::coulomb_HFYGB(R, Z, building_precision);
+    };
+
+
+
     // We now project the potential on the tree
-    mrcpp::project(core_el_tree, V_ce, building_precision);
+    //mrcpp::project(core_el_tree, V_ce, building_precision);
+    mrcpp::project(core_el_tree, smeared_potential, building_precision);
 
 
     // 5) PROJECT the function ON the TREE
@@ -250,7 +263,7 @@ int main(int argc, char **argv) {
     
     
     int max_cycle = 9;
-    std::cout << "Initializing the SCF cycle...";
+    std::cout << "Initializing variables for the SCF cycle...";
     mrcpp::PoissonOperator P(mra, building_precision);
     
 
@@ -265,11 +278,7 @@ int main(int argc, char **argv) {
     std::vector<double> norm_diff_values;
     std::vector<int> cycle_values;
 
-    std::cout << "*************************************************************" << '\n';
-    std::cout << '\n' << '\n';
-    compute_He_energy(mra, *Psi_2c[0].CompD[0], *core_el_tree.CompD[0], mu, E_tot);
-    std::cout << "*************************************************************" << '\n';
-
+    
 
 
     while (norm_diff > epsilon) {
@@ -392,7 +401,11 @@ int main(int argc, char **argv) {
     for (int i = 0; i < E_values.size(); i++){
         std::cout << cycle_values[i] << '\t' << E_values[i] << '\t' << norm_diff_values[i] << '\n';
     }
-    std::cout << '\n' << '\n';
+    std::cout << '\n' << '\n' << "Non relativistic energuy for He atom" << '\n';
+    std::cout << "*************************************************************" << '\n';
+    compute_He_energy(mra, *He_NR_Solution.CompD[0], *core_el_tree.CompD[0], mu, E_tot);
+    std::cout << "*************************************************************" << '\n';
+
     print::footer(0, timer, 2);
     return 0;
 }
