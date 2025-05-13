@@ -25,29 +25,27 @@ void make_density_local(CompFunction<3> &out, CompFunction<3> &inp, MultiResolut
     deep_copy(inp_2, inp);
 
     mrcpp::multiply(prec, out, 1.0, inp_2, inp, -1, false, false, true);
-    
+    if (debug){
     std::cout << '\t' << "out.iscomplex() = " << out.iscomplex() << '\n';
     std::cout << '\t' << "out.isreal() = " << out.isreal() << '\n'<<'\n';
-        
+    }
+    
     if (out.iscomplex()) {
-        
+        FunctionTree<3, double> *out_tree_REAL = out.CompC[0]->Real();
+        if (debug){
         std::cout << '\t' << "out.CompD[0] =" << out.CompD[0]<< '\n';
         std::cout << '\t' << "out.CompC[0] =" << out.CompC[0]<< '\n' << '\n';
-        
-        FunctionTree<3, double> *out_tree_REAL = out.CompC[0]->Real();
-       
+
         std::cout << '\t' << "*out.CompC[0].Real =" << out_tree_REAL << " <- We should be the same value!" << '\n';
         std::cout << '\t' << *out_tree_REAL << '\n';
  
-        
-         std::cout << '\t' << "out.CompC[0] =" << *(out.CompC[0])  << '\n';
-
+        std::cout << '\t' << "out.CompC[0] =" << *(out.CompC[0])  << '\n';
+        }
  
-        //out.CompD[0] = (*out.CompC[0]).Real();
         out.CompD[0] = out_tree_REAL;
-        std::cout << '\t' << "out.CompD[0] =" << out.CompD[0]<< '\n' << '\n';
+        //std::cout << '\t' << "out.CompD[0] =" << out.CompD[0]<< '\n' << '\n';
         out.CompC[0] = nullptr; // Set the pointer to nullptr to avoid double delete
-        std::cout << '\t' << "out.CompD[0] after the delete =" << out.CompD[0]<< '\n';
+        //std::cout << '\t' << "out.CompD[0] after the delete =" << out.CompD[0]<< '\n';
 
 
         
@@ -57,18 +55,6 @@ void make_density_local(CompFunction<3> &out, CompFunction<3> &inp, MultiResolut
         std::cout << '\t' << "make_density_local completed." << '\n'<< '\n';
     }
 }
-
-
-
-// copy onto real components
-        /* if (out.CompC[0] != nullptr) {
-            std::cout << "Deleting out.CompC[0]..." << '\n';
-            delete out.CompC[0];
-            std::cout << "Deleted out.CompC[0]!" << '\n';
-            out.CompC[0] = nullptr; // Imposta il puntatore a nullptr per evitare doppi delete
-            std::cout << "out.CompC[0] = nullptr!" << '\n';
-         }*/
-// FOR NOW I PLAY IT SAFE, A SIMPLE ADDITION MAY BE JUST TO ADD IN THE ARGUMENTS THE ABGV OPERATOR, NOT TO REDEFINE IT EVERY TIME
 
 
 
@@ -360,6 +346,8 @@ ComplexDouble compute_Term3_T_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<
 
     }
 
+
+
     return ComplexDouble(0,1)*(Top_contribution + Bottom_contribution);
 }
 
@@ -369,7 +357,7 @@ ComplexDouble compute_Term3_T_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<
 
 
 
-double compute_energy_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vector<mrcpp::CompFunction<3>*>> &Nabla_Psi_2c, mrcpp::CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree,  std::vector<mrcpp::CompFunction<3>> &Psi_2c, CompFunction<3> &V, CompFunction<3> &J_tree){
+void compute_energy_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vector<mrcpp::CompFunction<3>*>> &Nabla_Psi_2c, mrcpp::CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree,  std::vector<mrcpp::CompFunction<3>> &Psi_2c, CompFunction<3> &V, CompFunction<3> &J_tree, double &Tot_energy, double &Orbital_energy){
     if (verbose){std::cout << '\t' << "Computing Kinetic Term 1..." << '\n';}
     ComplexDouble Term1 = compute_Term1_T_ZORA(MRA, Nabla_Psi_2c, K_tree, Psi_2c);
     if (verbose){std::cout << '\t' << "Computing Kinetic Term 2..." << '\n';}
@@ -400,6 +388,8 @@ double compute_energy_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vec
 
     double real_Z = double(Z);
     ComplexDouble total_energy = real_Z * (kinetic_energy + monoel_pot_energy) + biel_energy;
+
+    verbose = true;
     if (verbose){
     std::cout << "--------------------------------------------------" << '\n';
     std::cout << "Kinetic energy TERM 1 = "  << real_Z * kin_prefactor * Term1 << '\n';
@@ -413,7 +403,13 @@ double compute_energy_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vec
     std::cout << "--------------------------------------------------" << '\n';
     }
 
-    
+    verbose = false;    
+
+
+    std::cout << '\t' << "-------------------------------" << '\n';
+        std::cout << '\t' << "| Energy = " << total_energy.real() << "|" << '\n';
+        std::cout << '\t' << "-------------------------------" << '\n' << '\n';
+
 
     // IF the enery is above zero it stops the program
     
@@ -422,7 +418,8 @@ double compute_energy_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vec
     //    exit(1);
     //}
 
-    return total_energy.real();
+    Tot_energy = total_energy.real();
+    Orbital_energy = monoel_pot_energy.real() + biel_energy.real() + kinetic_energy.real();
 
 }
     
@@ -532,12 +529,13 @@ void compute_term_C_Propagator(MultiResolutionAnalysis<3> &MRA, std::vector<std:
 
 void compute_term_D_Propagator(MultiResolutionAnalysis<3> &MRA,std::vector<mrcpp::CompFunction<3>> &Psi_in ,CompFunction<3> &V , CompFunction<3> &K_inverse, CompFunction<3> &term_D_top,CompFunction<3> &term_D_bottom){
     // Term_D = (-2m/K) * V * Psi
-    double factor = -2*m;
+    double factor = -2.0 * m;
     CompFunction<3> V_Psi_t(MRA);
     CompFunction<3> V_Psi_b(MRA);
 
-    mrcpp::multiply(building_precision, V_Psi_t, factor, V, Psi_in[0]);
-    mrcpp::multiply(building_precision, V_Psi_b, factor, V, Psi_in[1]);
+    
+    mrcpp::multiply(building_precision, V_Psi_t, 1.0, V, Psi_in[0]);
+    mrcpp::multiply(building_precision, V_Psi_b, 1.0, V, Psi_in[1]);
     
     if (debug){
     std::cout << "NORM INPUT:" << '\n';
@@ -545,9 +543,12 @@ void compute_term_D_Propagator(MultiResolutionAnalysis<3> &MRA,std::vector<mrcpp
     std::cout << "V_Psi_bottom = " << V_Psi_b.getSquareNorm() << '\n';
     }
     
-    mrcpp::multiply(building_precision, term_D_top ,   1, K_inverse,  V_Psi_t);
-    mrcpp::multiply(building_precision, term_D_bottom ,    1, K_inverse, V_Psi_b);
+    mrcpp::multiply(building_precision, term_D_top ,    1.0, K_inverse,  V_Psi_t);
+    mrcpp::multiply(building_precision, term_D_bottom , 1.0, K_inverse, V_Psi_b);
 
+
+
+    // I don't know Walt... kinda sus
     term_D_top.rescale(factor);
     term_D_bottom.rescale(factor);
 }
@@ -559,6 +560,7 @@ void compute_term_D_Propagator(MultiResolutionAnalysis<3> &MRA,std::vector<mrcpp
 
 void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::CompFunction<3>> &Psi_in, std::vector<std::vector<mrcpp::CompFunction<3> *>> &Nabla_Psi_2c, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree,  CompFunction<3> &V, CompFunction<3> &K_tree, CompFunction<3> &K_inverse, double &E_n, std::vector<mrcpp::CompFunction<3>> &Psi_out){
     // Build the Helmholtz operator
+    
     double mu = std::sqrt(-2*E_n);
     if (verbose || debug){
     std::cout << "--------------------------------------------------" << '\n';
@@ -583,15 +585,15 @@ void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::Co
     CompFunction<3> term_A_top(MRA);
     CompFunction<3> term_A_bottom(MRA);
 
-    // Term b) K_invinverted * (\Nabla K \cdot \Nabla \Psi^n)
+    // Term b) + K_invinverted * (\Nabla K \cdot \Nabla \Psi^n)
     CompFunction<3> term_B_top(MRA);
     CompFunction<3> term_B_bottom(MRA);
 
-    // Term c) K_invinverted * (i * \sigma \cdot (\Nabla \cross K (\Nabla (\Psi^n))))
+    // Term c) + K_invinverted * (i * \sigma \cdot (\Nabla \cross K (\Nabla (\Psi^n))))
     CompFunction<3> term_C_top(MRA);
     CompFunction<3> term_C_bottom(MRA);
 
-    // Term d) K_invinverted * 2*m*V
+    // Term d) - K_invinverted * 2*m*V
     CompFunction<3> term_D_top(MRA);
     CompFunction<3> term_D_bottom(MRA);
 
@@ -665,7 +667,9 @@ void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<mrcpp::Co
     if (verbose){std::cout << '\n' <<  "!APPLYING HELMOLTZ OPERATOR!" << '\n' << '\n';}
     mrcpp::apply(building_precision, Psi_out[0], Helm, Psi_to_be_convoluted[0]);
     mrcpp::apply(building_precision, Psi_out[1], Helm, Psi_to_be_convoluted[1]);
+
 }
+
 
 
 
@@ -694,260 +698,3 @@ void Renormalize_Spinor(std::vector<mrcpp::CompFunction<3>> &Psi_2c){
 
 
 
-
-
-void Update_SCF_Variables(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, std::vector<mrcpp::CompFunction<3>> &Psi_2c, CompFunction<3> &V_electron_nucleus ,std::vector<std::vector<mrcpp::CompFunction<3> *>> &Nabla_Psi_2c,CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree, CompFunction<3> &K_inverse, CompFunction<3> &V, CompFunction<3> &J, FunctionTree<3> &K_real, mrcpp::PoissonOperator &P){
-    
-    if (debug){
-        std::cout << "--------------------------------------------------" << '\n';
-        std::cout << "Updating SCF variables..." << '\n';
-    }
-    Nabla_Psi_2c[0] = mrcpp::gradient(D,Psi_2c[0]);
-    Nabla_Psi_2c[1] = mrcpp::gradient(D,Psi_2c[1]);
-    if (debug){
-        std::cout << "Nabla_Psi_2c:TOP[0] = " << Nabla_Psi_2c[0][0]->getSquareNorm() << '\n';
-        std::cout << "Nabla_Psi_2c:TOP[1] = " << Nabla_Psi_2c[0][1]->getSquareNorm() << '\n';
-        std::cout << "Nabla_Psi_2c:TOP[2] = " << Nabla_Psi_2c[0][2]->getSquareNorm() << '\n';
-        std::cout << "Nabla_Psi_2c:BOT[0] = " << Nabla_Psi_2c[1][0]->getSquareNorm() << '\n';
-        std::cout << "Nabla_Psi_2c:BOT[1] = " << Nabla_Psi_2c[1][1]->getSquareNorm() << '\n';
-        std::cout << "Nabla_Psi_2c:BOT[2] = " << Nabla_Psi_2c[1][2]->getSquareNorm() << '\n';
-    }
-
-
-
-    // Create the J function
-    mrcpp::CompFunction<3> J_t(MRA);
-    mrcpp::CompFunction<3> J_b(MRA);
-    mrcpp::CompFunction<3> Rho_t(MRA);
-    mrcpp::CompFunction<3> Rho_b(MRA);
-    mrcpp::CompFunction<3> Rho(MRA);
-
-    std::cout << "--------------------------------------------------" << '\n';
-    std::cout << "Psi_2c[0] is real = " << Psi_2c[0].isreal() << '\n';
-    std::cout << "Psi_2c[0] is complex = " << Psi_2c[0].iscomplex() << '\n';
-    std::cout << "Psi_2c[1] is real = " << Psi_2c[1].isreal() << '\n';
-    std::cout << "Psi_2c[1] is complex = " << Psi_2c[1].iscomplex() << '\n';
-    std::cout << "Rho_t is real = " << Rho_t.isreal() << '\n';
-    std::cout << "Rho_t is complex = " << Rho_t.iscomplex() << '\n';
-    std::cout << "Rho_b is real = " << Rho_b.isreal() << '\n';
-    std::cout << "Rho_b is complex = " << Rho_b.iscomplex() << '\n';
-    std::cout << "--------------------------------------------------" << '\n'<<'\n';
-   
-
-
-
-    make_density_local(Rho_t, Psi_2c[0] , MRA, building_precision);
-    make_density_local(Rho_b, Psi_2c[1], MRA, building_precision);
-    std::cout << "-------------CORRECTLY COMPUTED DENSITY----------" << '\n';
-
-
-    
-
-
-
-    std::cout << "---------------- INFO POST MDL ------------------" << '\n';
-    std::cout << "Rho_t is real = " << Rho_t.isreal() << '\n';
-    std::cout << "Rho_t is complex = " << Rho_t.iscomplex() << '\n';
-    std::cout << "Rho_b is real = " << Rho_b.isreal() << '\n';
-    std::cout << "Rho_b is complex = " << Rho_b.iscomplex() << '\n';
-    std::cout << "------------  Next: Define ConvOp --------------" << '\n'<<'\n';
-  
-
-
-    
-
-
-    mrcpp::apply<3>(building_precision, J_t, P, Rho_t);
-    mrcpp::apply<3>(building_precision, J_b, P, Rho_b);
-    std::cout << "Convolution operator applied"  << '\n' << '\n';
-    // Add the 2
-    mrcpp::add(J, 2.0, J_t, 2.0, J_b, building_precision, false); // Note that I also multriply by 2 here, since we have 2 identical electrons
-
-
-
-    if (debug){
-        std::cout << "Rho_t = " << Rho_t.getSquareNorm()    << '\n';
-        std::cout << "Rho_b = " << Rho_b.getSquareNorm()    << '\n';
-        std::cout << "Rho   = " << Rho.getSquareNorm()      << '\n';
-        std::cout << "J_t   = " << J_t.getSquareNorm()      << '\n';
-        std::cout << "J_b   = " << J_b.getSquareNorm()      << '\n';
-        std::cout << "J_tot = " << J.getSquareNorm()        << '\n';
-            std::cout << "--------------------------------------------------" << '\n';
-            std::cout << "         JUST ENETERED THE SUBROUTINE" << '\n';
-            std::cout << "--------------------------------------------------" << '\n';
-            std::cout << "Rho_t is real = " << Rho_t.isreal() << '\n';
-            std::cout << "Rho_t is complex = " << Rho_t.iscomplex() << '\n';
-            std::cout << "Rho_b is real = " << Rho_b.isreal() << '\n';
-            std::cout << "Rho_b is complex = " << Rho_b.iscomplex() << '\n';
-            std::cout << "Rho is real = " << Rho.isreal() << '\n';
-            std::cout << "Rho is complex = " << Rho.iscomplex() << '\n';
-
-            std::cout << "&K_real = " << &K_real << '\n';
-            std::cout << "K_inverse = " << K_inverse.getSquareNorm() << '\n';
-            std::cout << "K_inv is real" << K_inverse.isreal() << '\n';
-            std::cout << "K_inv is complex" << K_inverse.iscomplex() << '\n';
-            std::cout << "&K_inverse = " << &K_inverse << '\n';
-            if (num_cycle > 0){
-            std::cout << "K_inverse.CompD = " << K_inverse.CompD << '\n';
-            std::cout << "*K_inverse.CompD = " << *(K_inverse.CompD) << '\n';
-            std::cout << "**K_inverse.CompD = " << **(K_inverse.CompD) << '\n';
-            }
-    }
-
-
-    // Now we compute the new potential V as the sum of the electron-nucleus potential and the J potential
-    mrcpp::add(V, 1.0, V_electron_nucleus, 1.0, J, building_precision, false);
-
-
-
-    
-    if (debug){
-        std::cout << "V_electron_nucleus = " << V_electron_nucleus.getSquareNorm() << '\n';
-        std::cout << "V = " << V.getSquareNorm() << '\n';
-        // is real or is complex?
-        std::cout << "REALITY CHECK" << '\n';
-        std::cout << "V is real " << V.isreal() << '\n';
-        std::cout << "V is complex " << V.iscomplex() << '\n';
-        std::cout << "J_b is real " << J_b.isreal() << '\n';
-        std::cout << "J_b is complex " << J_b.iscomplex() << '\n';
-        std::cout << "J_t is real " << J_t.isreal() << '\n';
-        std::cout << "J_t is complex " << J_t.iscomplex() << '\n';
-        std::cout << "J is real " << J.isreal() << '\n';
-        std::cout << "J is complex " << J.iscomplex() << '\n';
-        std::cout << "--------------------------------------------------" << '\n';
-    }
-
-
-
-
-
-    // Now we compute the new K tree
-    double constant = 2.0 * m * c * c;
-    double prefactor = 1/constant;
-
-    // Now i add 1 to V in each point of the tree
-    std::function<double(const Coord<3> &x)> ones_function = [] (const mrcpp::Coord<3> &r) -> double {
-        return  1.;
-    };
-    CompFunction<3> One(MRA);
-    mrcpp::project(One, ones_function, building_precision);
-   
-
-    std::cout << "One is real " << One.isreal() << '\n';
-    std::cout << "One is complex " << One.iscomplex() << '\n';
-    std::cout << "V is real " << V.isreal() << '\n';
-    std::cout << "V is complex " << V.iscomplex() << '\n';
-
-    // Now K_inv = 1 - V/2mc^2
-    
-    mrcpp::add(K_inverse, 1.0, One, -prefactor , V, building_precision, false);
-
-
-
-
-    if (num_cycle>0){
-        std::cout << " AFTER ADDITION" << '\n';
-        std::cout << "K_inverse = " << K_inverse.getSquareNorm() << '\n';
-        std::cout << "K_inv is real " << K_inverse.isreal() << '\n';
-        std::cout << "K_inv is complex " << K_inverse.iscomplex() << '\n'; 
-        std::cout << "One is real " << One.isreal() << '\n';
-        std::cout << "One is complex " << One.iscomplex() << '\n';
-        std::cout << "V is real " << V.isreal() << '\n';
-        std::cout << "V is complex " << V.iscomplex() << '\n';
-        std::cout << "--------------------------------------------------" << '\n';
-        std::cout << "&K_inverse = " << &K_inverse << '\n';
-        std::cout << "K_inverse.CompD = " << K_inverse.CompD[0] << '\n';
-        std::cout << "*K_inverse.CompD = " << *(K_inverse.CompD[0]) << '\n';
-    }
-
-    if (debug){
-        std::cout << "K_inverse = " << K_inverse.getSquareNorm() << '\n';
-        std::cout << "Ones_function = " << One.getSquareNorm() << '\n';
-    }
- 
- 
-
-// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    // Create a FMap that does x -> 1/x
-    std::function<double(double)> Reciprocal = [] (const double &x) -> double {
-        return  (1.0 / x) ;
-    };
-
-
-    // Real function
-
-    //K_real.clear();
-    //std::cout << "K_real cleared successfully." << '\n';
-
-
-    // K_inverse is a CompFunc of the form 1 - V/2mc^2
-    // Print the debug: all the variables and pointers for the inputs in map
-    if (debug){
-        std::cout << "--------------------------------------------------" << '\n';
-        std::cout << "building prec = " << building_precision << '\n';
-        std::cout << "Recitprocal =" << &Reciprocal << '\n';
-        std::cout << "&K_real = << " << &K_real << '\n';
-        std::cout << "K_inverse = " << K_inverse.getSquareNorm() << '\n';
-        std::cout << "&K_inverse = " << &K_inverse << '\n';
-        std::cout << "K_inverse.CompD = " << K_inverse.CompD << '\n';
-        std::cout << "*K_inverse.CompD = " << *(K_inverse.CompD) << '\n';
-        std::cout << "**K_inverse.CompD = " << **(K_inverse.CompD) << '\n';
-
-    }
-
-    if (K_inverse.CompD[0] == nullptr) {
-        std::cerr << "Error: K_inverse.CompD[0] is null!" << '\n';
-        return;
-    }
-    map(building_precision, K_real, *(K_inverse.CompD[0]) ,Reciprocal);
-
-
-    std::cout << "Method 1 norm = " << K_real.getSquareNorm() << '\n';
-
-    
-    K_tree.setReal(&K_real,0);
-
-    
-
-
-    if (debug){
-        std::cout << "K_tree = " << K_tree.getSquareNorm() << '\n';
-        std::cout << "K_tree is real = " << K_tree.isreal() << '\n';
-        std::cout << "K_tree is complex = " << K_tree.iscomplex() << '\n';
-        std::cout << "K_tree.CompD = " << K_tree.CompD[0] << '\n';
-        std::cout << "K_tree.CompC = " << K_tree.CompC[0] << '\n';
-        std::cout << "*K_tree.CompD[0] = " << *(K_tree.CompD[0]) << '\n';
-
-
-        std::cout << '\n';
-        std::cout << "Nabla_K_tree[0] = " << Nabla_K_tree[0] << '\n';
-        std::cout << "Nabla_K_tree[1] = " << Nabla_K_tree[1] << '\n';
-        std::cout << "Nabla_K_tree[2] = " << Nabla_K_tree[2] << '\n';
-
-    }
-    
-
-
-    // Lastly, we update the new Nabla_K_tree
-    /* for (int i=0;i<3;i++){
-        if (Nabla_K_tree[i] != nullptr) {
-            delete Nabla_K_tree[i];
-            Nabla_K_tree[i] = nullptr;
-        }
-    } */
-
-    Nabla_K_tree = mrcpp::gradient(D,K_tree);
-    if (debug){
-
-        std::cout << '\n';
-        std::cout << "Nabla_K_tree[0] = " << Nabla_K_tree[0] << '\n';
-        std::cout << "Nabla_K_tree[1] = " << Nabla_K_tree[1] << '\n';
-        std::cout << "Nabla_K_tree[2] = " << Nabla_K_tree[2] << '\n';
-        std::cout << "--------------------------------------------------" << '\n';
-        std::cout << "Nabla_K_tree[0] = " << Nabla_K_tree[0]->getSquareNorm() << '\n';
-        std::cout << "Nabla_K_tree[1] = " << Nabla_K_tree[1]->getSquareNorm() << '\n';
-        std::cout << "Nabla_K_tree[2] = " << Nabla_K_tree[2]->getSquareNorm() << '\n';
-        std::cout << "--------------------------------------------------" << '\n' << '\n';
-    }
-
-}

@@ -16,7 +16,7 @@
 #include "../api/MWOperators"
 
 
-void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, std::vector<mrcpp::CompFunction<3>> &Psi_2c, CompFunction<3> &V_electron_nucleus ,std::vector<std::vector<mrcpp::CompFunction<3> *>> &Nabla_Psi_2c,CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree, CompFunction<3> &K_inverse, CompFunction<3> &V, CompFunction<3> &J, FunctionTree<3> &K_real, mrcpp::PoissonOperator &P){
+void Update_SCF_Variables(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, std::vector<mrcpp::CompFunction<3>> &Psi_2c, CompFunction<3> &V_electron_nucleus ,std::vector<std::vector<mrcpp::CompFunction<3> *>> &Nabla_Psi_2c,CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree, CompFunction<3> &K_inverse, CompFunction<3> &V, CompFunction<3> &J, mrcpp::PoissonOperator &P){
     // Updating the Nabla_Psi_2c
     std::cout << "--------------UPDATING GRADIENT--------------" << '\n';
     Nabla_Psi_2c[0] = mrcpp::gradient(D,Psi_2c[0]);
@@ -51,10 +51,7 @@ void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, 
   
 
     mrcpp::add(Rho, 1.0, Rho_t, 1.0, Rho_b, building_precision, false);
-    //std::cout << "Rho is real = " << Rho.isreal() << '\n';
-    //std::cout << "Rho is complex = " << Rho.iscomplex() << '\n';
-    //std::cout << "Norm of Rho = " << Rho.getSquareNorm() << '\n';
-
+    
     if ( num_cycle !=0  && (Rho_b.getSquareNorm() == 0.0 || Rho_t.getSquareNorm() == 0.0)) {
         std::cerr << "Error: Rho_t or Rho_b has zero norm!" << '\n';
         exit(1);
@@ -68,15 +65,14 @@ void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, 
     //std::cout << "Rho status" << *(Rho.CompD[0]) << '\n';
     mrcpp::apply(building_precision, J, P, Rho);
     std::cout << "Applied the Poisson operator to the density" << '\n';
-    J.rescale(ComplexDouble(2.0,0.0));  
-    //std::cout << "J is real = " << J.isreal() << '\n';
-    //std::cout << "J is complex = " << J.iscomplex() << '\n';
+    double two_pi = (2.0 * M_PI);
+    J.rescale(ComplexDouble(2.0 ,0.0));  
     std::cout << "---------------- DONE -------------------" << '\n' << '\n';
 
 
     // Compute the full potential
     std::cout << "--------------UPDATING V------------------" << '\n';
-    mrcpp::add(V, 1.0, V_electron_nucleus,1.0, J, building_precision, false); // V = V_electron_nucleus + J
+    mrcpp::add(V, 1.0, V_electron_nucleus,0.5, J, building_precision, false); // V = V_electron_nucleus + 0.5 J = V_ce(r)+J(r)
     std::cout << "V norm = " << V.getSquareNorm() << '\n';
     std::cout << "---------------- DONE -------------------" << '\n' << '\n';
 
@@ -90,15 +86,23 @@ void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, 
     double prefactor = 1/constant;
 
 
-    // This is the old way of doing it, but it is not working
-    std::function<double(const Coord<3> &x)> K_function_compute = [&V_electron_nucleus, &J, prefactor] (const mrcpp::Coord<3> &r) -> double {
-        double V_r = V_electron_nucleus.CompD[0]->evalf(r);
-        V_r = V_r + J.CompD[0]->evalf(r);
-        return 1.0 / (1.0 - (prefactor * V_r));   
+    // Define and project a the function whcih is one everywhere
+    std::function<double(const Coord<3> &x)> one = [] (const mrcpp::Coord<3> &r) -> double {
+        return 1.0;
+    };
+    mrcpp::CompFunction<3> one_tree(MRA);
+    mrcpp::project(one_tree, one, building_precision);
+
+    // Function to calculate Kappa
+    std::function<double(const Coord<3> &x)> K_function_compute = [&V_electron_nucleus, &J, prefactor, &V] (const mrcpp::Coord<3> &r) -> double {
+        double VAL = 1.0 - (prefactor * V.CompD[0]->evalf(r));
+        return (1.0 / VAL) -1.0;   
     };
     mrcpp::project(K_tree, K_function_compute, building_precision);
     std::cout << "K_tree norm NO MAP= " << K_tree.getSquareNorm() << '\n';
  
+    K_tree.add(ComplexDouble(1.0,0.0), one_tree); // K_tree = K_tree + 1
+
     /*
     std::function<double(double)> Reciprocal = [] (const double &x) -> double {
         return  (1.0 / x) ;
@@ -114,9 +118,8 @@ void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, 
     */
 
 
-
+    
     if (debug){
-    std::cout << "K_real norm = " << K_real.getSquareNorm() << '\n';
     std::cout << "K_tree norm = " << K_tree.getSquareNorm() << '\n';
     std::cout << "K_tree is real = " << K_tree.isreal() << '\n';
     std::cout << "K_tree is complex = " << K_tree.iscomplex() << '\n';
@@ -131,13 +134,18 @@ void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, 
     std::cout << "-------------UPDATING K_inv---------------" << '\n';
 
 
-    // Copy V in K_inverse
-    std::function<double(const Coord<3> &x)> K_inverse_function = [&K_tree] (const mrcpp::Coord<3> &r) -> double {
-        return 1.0 / K_tree.CompD[0]->evalf(r);   
+    // K_inverse
+    std::function<double(const Coord<3> &x)> K_inverse_function = [&K_tree, &V, prefactor, &V_electron_nucleus, &J] (const mrcpp::Coord<3> &r) -> double {
+        return - (prefactor * (V.CompD[0]->evalf(r)));
+        //return 1.0 / K_tree.CompD[0]->evalf(r);   
     };
 
     mrcpp::project(K_inverse, K_inverse_function, building_precision);
+    //add: K_inverse + 1
+    K_inverse.add(ComplexDouble(1.0,0.0), one_tree);
+    
 
+    
     if (debug){
     std::cout << "K_inverse norm = " << K_inverse.getSquareNorm() << '\n';
     std::cout << "K_inverse is real = " << K_inverse.isreal() << '\n';
@@ -146,6 +154,9 @@ void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, 
     std::cout << *(K_inverse.CompD[0]) << '\n';
     }
     
+
+
+
     std::cout << "---------------- DONE -------------------" << '\n' << '\n';
 
 
@@ -173,4 +184,5 @@ void Update_SCF_Variables2(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, 
     }
     std::cout << "-------------- DONE UPDATING SCF VARIABLES -------------------" << '\n' << '\n';
 
+  
 }
