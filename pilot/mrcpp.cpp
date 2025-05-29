@@ -14,13 +14,16 @@
 
 
 using namespace mrcpp;
+using Orbital_Pointer_List = std::vector<std::vector<mrcpp::CompFunction<3>>*>;
+using Spinor_CompFunction = std::vector<mrcpp::CompFunction<3>>;
+using Spinor_gradients_pointer_list = std::vector<std::vector<std::vector<mrcpp::CompFunction<3>*>>>;
 
 // DEBUG
 bool debug = false;
 bool verbose = false;
 
 // GLOBAL VARIABLES
-int Z =2;
+int Z =4;
 //double c = 137.035999146; // --> This is the speed of light in atomic units
 double c = 137.035999177; 
 double m = 1.0;
@@ -34,14 +37,19 @@ double epsilon;
 int Relativity;
 int num_cycle =  0;     //    -> SCF cycle counter 
 
+// Define another function that is zero everywhere
+static std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3> &r) -> double {
+    return 0.0;
+};
+ 
+
 
 
 #include "my_utilities.h"
 //#include "ZORA_utilities.h"
 
-#include "He_atom_ZORA_utils.h"
-#include "He_atom_utils.h"
-#include "Updating_var_ZORA.h"
+#include "Be_atom_ZORA_utils.h"
+#include "Be_Update_var.h"
 #include "Smeared_potential.h"
 //#include "ZORA_utilities.h"
 
@@ -85,8 +93,8 @@ int main(int argc, char **argv) {
     epsilon = parameters["epsilon"];
     Z = static_cast<int>(parameters["Z"]);
     // Set the charge as neutra by:
-    Z = 2;
-    n_electrons = 2; // --> As we are dealing with the H type atom
+    Z = 4;
+    n_electrons = 4; // --> As we are dealing with the H type atom
     
 
     std::cout << "Parameters read from file: " << '\n' << '\n';
@@ -153,19 +161,21 @@ int main(int argc, char **argv) {
     std::array<int,3> pow = {0,0,0};
     
     // Define the trial function as a Slater-type orbital
-    std::function<double(const Coord<3> &x)> slater = [] (const mrcpp::Coord<3> &r) -> double {
+    std::function<double(const Coord<3> &x)> Be_1s = [] (const mrcpp::Coord<3> &r) -> double {
         auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
-        double lambda = std::sqrt(1. - (1/(c*c)) );
-        double alpha = 1.69;
-        return exp(-alpha*R);
+        double alpha = 4.0;
+        return std::exp(-alpha*R);
     };
-    mrcpp::CompFunction He_NR_Solution(mra);
-    mrcpp::project(He_NR_Solution, slater, building_precision);
 
-    // Define another function that is zero everywhere
-    std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3> &r) -> double {
-        return 0.0;
+    std::function<double(const Coord<3> &x)> Be_2s = [] (const mrcpp::Coord<3> &r) -> double {
+        auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+        double alpha = 1.7;
+        double pref = 1-alpha*R;
+        return  pref * std::exp(-0.5 *alpha*R);
     };
+
+
+
     
 
     // 4) Let's DEFINE now the POTENTIAL for CORE ELECTRON function V_ee(r) = -1/r
@@ -176,7 +186,7 @@ int main(int argc, char **argv) {
 
     // Here is the smeared potential
     // Define the smeared potential
-    std::function<double(const Coord<3> &x)> smeared_potential = [=] (const mrcpp::Coord<3> &r) -> double {
+    std::function<double(const Coord<3> &x)> smeared_potential = [] (const mrcpp::Coord<3> &r) -> double {
         auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
         return -SmearedPotential::coulomb_HFYGB(R, Z, building_precision);
     };
@@ -185,40 +195,219 @@ int main(int argc, char **argv) {
 
     // We now project the potential on the tree
     //mrcpp::project(core_el_tree, V_ce, building_precision);
-    mrcpp::project(core_el_tree, smeared_potential, building_precision);
+    mrcpp::project(core_el_tree, V_ce, building_precision);
 
 
     // 5) PROJECT the function ON the TREE
-    mrcpp::project(Trial_function_tree_top, slater, building_precision); // I project the trial-function on the tree
-    mrcpp::project(Trial_function_tree_bottom, zero, building_precision); // I project the trial-function on the tree
+    std::vector<mrcpp::CompFunction<3>> Psi_1(2);
+    std::vector<mrcpp::CompFunction<3>> Psi_2(2);
+    std::vector<mrcpp::CompFunction<3>> Psi_3(2);
+    std::vector<mrcpp::CompFunction<3>> Psi_4(2);
 
-    double Psi_norm = std::sqrt(Trial_function_tree_top.getSquareNorm() + Trial_function_tree_bottom.getSquareNorm());
+
+
+    // INITIALIZING TRIAL FUNCTIONS
+    // 1s spin up
+    mrcpp::project( Psi_1[0], Be_1s, building_precision);
+    mrcpp::project( Psi_1[1], zero, building_precision);
+    //std::cout << "Psi_2c_1[0] norm = " << Psi_1[0].getSquareNorm() << '\n';
+    //std::cout << "Psi_2c_1[1] norm = " << Psi_1[1].getSquareNorm() << '\n';
+
+    // 1s spin down
+    project(Psi_2[0], zero, building_precision);
+    project(Psi_2[1], Be_1s, building_precision);
+    //std::cout << "Psi_2c_2[0] norm = " << Psi_2[0].getSquareNorm() << '\n';
+    //std::cout << "Psi_2c_2[1] norm = " << Psi_2[1].getSquareNorm() << '\n';
+    // 2s spin up
+    project(Psi_3[0], Be_2s, building_precision);
+    project(Psi_3[1], zero, building_precision);
+    //std::cout << "Psi_2c_3[0] norm = " << Psi_3[0].getSquareNorm() << '\n';
+    //std::cout << "Psi_2c_3[1] norm = " << Psi_3[1].getSquareNorm() << '\n';
+    // 2s spin down
+    project(Psi_4[0], zero, building_precision);
+    project(Psi_4[1], Be_2s, building_precision);
+    //std::cout << "Psi_2c_4[0] norm = " << Psi_4[0].getSquareNorm() << '\n';
+    //std::cout << "Psi_2c_4[1] norm = " << Psi_4[1].getSquareNorm() << '\n';
+
+    // This object is fondamental
+
+    Orbital_Pointer_List Spin_orbitals = {
+        &Psi_1,
+        &Psi_2,
+        &Psi_3,
+        &Psi_4
+    };
+
+
+    // Now we normalize all spin orbitals
+    for (auto &orbital : Spin_orbitals) {
+        Renormalize_Spinor(*orbital);
+        std::cout << "Spin orbital top norm =" << (*orbital)[0].getSquareNorm() << '\n';
+        std::cout << "Spin orbital bottom norm =" << (*orbital)[1].getSquareNorm() << '\n';
+        std::cout << '\n';
+    }
+   
     
-    // Renormalize the spinor components
-    Trial_function_tree_top.rescale(1.0/Psi_norm);
-    Trial_function_tree_bottom.rescale(1.0/Psi_norm);
 
-    // Create a vector of CompFunction<3> to hold the components
-    std::vector<mrcpp::CompFunction<3>> Psi_2c(2,mra);
-    Psi_2c[0] = Trial_function_tree_top;
-    Psi_2c[1] = Trial_function_tree_bottom;
 
     
-    if (debug){ 
+    //std::vector<mrcpp::FunctionTree<3,double>> J_ij;
+    std::vector<std::vector<mrcpp::CompFunction<3>*>> J_ij(4, std::vector<mrcpp::CompFunction<3>*>(2, nullptr));
+    std::vector<std::vector<mrcpp::CompFunction<3>*>> K_ij(4, std::vector<mrcpp::CompFunction<3>*>(2, nullptr));
+    std::vector<mrcpp::CompFunction<3>> J_ij_T(4);
+    std::vector<mrcpp::CompFunction<3>> J_ij_B(4);
+    std::vector<mrcpp::CompFunction<3>> K_ij_T(4);
+    std::vector<mrcpp::CompFunction<3>> K_ij_B(4);
+    
+    for (int k =0; k<4; k++){
+        project(J_ij_T[k], zero, building_precision);
+        project(J_ij_B[k], zero, building_precision);
+        project(K_ij_T[k], zero, building_precision);
+        project(K_ij_B[k], zero, building_precision);
+        J_ij[k][0] = &J_ij_T[k];
+        J_ij[k][1] = &J_ij_B[k];
+        K_ij[k][0] = &K_ij_T[k];
+        K_ij[k][1] = &K_ij_B[k];   
 
-    // Befofe starting the SCF cycle, let's print some debugging information:
-    std::cout << "Here is some debugging information: " << '\n';
-    std::cout << "************************************" << '\n';
-    std::cout << '\n'<< " Psi_trial (top) square norm = " << Psi_2c[0].getSquareNorm() << '\n';
-    std::cout << '\n'<< " Psi_trial (bottom) square norm = " << Psi_2c[1].getSquareNorm() << '\n' << '\n';
+
+        //std::cout << "J_ij[" << k << "][0] address = " << J_ij[k][0]->CompD[0] << '\n';
+        //std::cout << "J_ij[" << k << "][1] address = " << J_ij[k][1]->CompD[0] << '\n';
+        //std::cout << "K_ij[" << k << "][0] address = " << K_ij[k][0]->CompD[0] << '\n';
+        //std::cout << "K_ij[" << k << "][1] address = " << K_ij[k][1]->CompD[0] << '\n';
 
     }
     
 
 
-    std::cout << '\n'<< " Psi_trial (top) square norm = " << Psi_2c[0].getSquareNorm() << '\n';
-    std::cout << '\n'<< " Psi_trial (bottom) square norm = " << Psi_2c[1].getSquareNorm() << '\n' << '\n';
 
+
+
+    // Create a 4x4 matrix of ComplexDouble and initialize it as zero
+    std::vector<std::vector<std::complex<double>>> F_matrix(4, std::vector<std::complex<double>>(4, std::complex<double>(0.0, 0.0)));
+    std::vector<double> Energy_eigenvalues(4, 0.0);
+    
+
+    Spinor_gradients_pointer_list Spinor_gradients(4, std::vector<std::vector<mrcpp::CompFunction<3>*>>(2, std::vector<mrcpp::CompFunction<3>*>(3, nullptr)));
+
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            for (int k = 0; k < 3; ++k) {
+                Spinor_gradients[i][j][k] = new mrcpp::CompFunction<3>(mra);
+            }
+        }
+    }
+
+
+    
+
+    mrcpp::CompFunction<3> Mean_field_potential(mra); // -> This is the tree that will hold the potential function
+    project(Mean_field_potential, zero, building_precision); // Initialize the potential to zero
+    mrcpp::CompFunction<3> Kappa_tree(mra);  // -> This is the tree that will hold the K function
+    mrcpp::CompFunction<3> Kappa_inverted_tree(mra);  // -> This is the tree that will hold the K^-1 function
+    std::vector<mrcpp::CompFunction<3> *> Nabla_Kappa_tree(3, new mrcpp::CompFunction<3>(mra)); // -> This is the tree that will hold the gradient of K
+    
+    // Gradient of K
+    mrcpp::ABGVOperator<3> D(mra, 0.0, 0.0); // deine the ABGV operator
+   
+
+    PoissonOperator P(mra, building_precision);
+    K_Psi(K_ij_T,K_ij_B, Spin_orbitals, mra, P);
+    std::cout << "K_ij_T and K_ij_B computed." << '\n';
+    J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  mra, P);
+    std::cout << "J_ij computed." << '\n';
+    Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, mra);
+
+
+
+    Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,mra, core_el_tree, Mean_field_potential);
+
+//    std::cout << "kin 1s" << - 0.5 * compute_Term1_T_ZORA(mra, Spinor_gradients[0], Kappa_tree, *Spin_orbitals[0]) << '\n';
+//    std::cout << "Spinor gradients computed." << '\n';
+
+
+
+    std::cout << "Kappa tree and Nabla Kappa tree computed." << '\n';
+    Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
+    std::cout << "Fock matrix computed." << '\n';
+   
+
+    std::cout<< '\n';
+    std::cout<< '\n';
+    std::cout << "Fock matrix:" << '\n';
+    for (const auto &row : F_matrix) {
+        for (const auto &elem : row) {
+            std::cout << elem << " ";
+        }
+        std::cout << '\n';
+    }
+    std::cout<< '\n';
+    std::cout<< '\n';
+
+    std::cout << "Energy eigenvalues:" << '\n'; 
+    for (const auto &energy : Energy_eigenvalues) {
+        std::cout << energy << '\n';
+    }
+    
+
+    std::cout << '\n' << '\n';
+    std::cout << "************************************************************"  << '\n';
+    std::cout << "Tot energy of the system = " << std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0) << '\n';
+    std::cout << "************************************************************" << '\n' << '\n';
+
+    std::vector<double> norm_difference_list(4,0.0);
+
+    apply_Helmholtz_ZORA_all_electrons(mra, F_matrix, Spin_orbitals, Spinor_gradients, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B, Nabla_Kappa_tree, Kappa_tree, Kappa_inverted_tree, norm_difference_list);
+
+
+    std::cout << "New psi norms:" << '\n';
+    for (int i = 0; i < 4; ++i) {
+        std::cout << "Psi_2c_" << i << "[0] norm = " << (*Spin_orbitals[i])[0].getSquareNorm() << '\t';
+        std::cout << "Psi_2c_" << i << "[1] norm = " << (*Spin_orbitals[i])[1].getSquareNorm() << '\n';
+    }
+
+    for (auto &orbital : Spin_orbitals) {
+        Renormalize_Spinor(*orbital);
+        std::cout << "Spin orbital top norm =" << (*orbital)[0].getSquareNorm() << '\n';
+        std::cout << "Spin orbital bottom norm =" << (*orbital)[1].getSquareNorm() << '\n';
+        std::cout << '\n';
+    }
+
+
+
+    K_Psi(K_ij_T,K_ij_B, Spin_orbitals, mra, P);
+    J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  mra, P);
+    Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, mra);
+    Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,mra, core_el_tree, Mean_field_potential);
+    Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
+    std::cout<< '\n';
+    std::cout<< '\n';
+    std::cout << "Energy eigenvalues:" << '\n'; 
+    for (const auto &energy : Energy_eigenvalues) {
+        std::cout << energy << '\n';
+    }
+    std::cout << '\n' << '\n';
+    std::cout << "************************************************************"  << '\n';
+    std::cout << "Tot energy of the system = " << std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0) << '\n';
+    std::cout << "************************************************************" << '\n' << '\n';
+
+
+
+    exit(0);
+
+
+
+
+
+
+
+
+
+    double Psi_norm = 0;
+
+    
+
+
+    
 
    
       /*
@@ -230,18 +419,12 @@ int main(int argc, char **argv) {
     */
 
     // Parameters for the SCF
-    double norm_diff = 1;   //    -> Norm of the difference in the 2 consecutive iterations (initialized as 1 to begin the while loop)
+    double norm_diff_max = 1.0;   //    -> Norm of the difference in the 2 consecutive iterations (initialized as 1 to begin the while loop)
     double E_tot;               //    -> Energy of the system
     double E_Psi;               //    -> Energy of the orbital
     
     // We now define all the trees that will be used to compute the enrgy and the SCF cycle
-    mrcpp::CompFunction<3> K_tree(mra);  // -> This is the tree that will hold the K function
-    mrcpp::CompFunction<3> K_inverted_tree(mra);  // -> This is the tree that will hold the K^-1 function
-    std::vector<mrcpp::CompFunction<3> *> Nabla_K_tree(3, new mrcpp::CompFunction<3>(mra)); // -> This is the tree that will hold the gradient of K
-    
-    // Gradient of K
-    mrcpp::ABGVOperator<3> D(mra, 0.0, 0.0); // deine the ABGV operator
-    // Using this to calculate the gradient of K, in the one el case is a constant.
+     // Using this to calculate the gradient of K, in the one el case is a constant.
     //Nabla_K_tree = mrcpp::gradient(D, K_tree);
     std::vector<std::vector<mrcpp::CompFunction<3>*>> Nabla_Psi_2c(2, std::vector<mrcpp::CompFunction<3>*>(3, new mrcpp::CompFunction<3>(mra))); // -> This is the tree that will hold the gradient of Psi_2c
 
@@ -257,20 +440,22 @@ int main(int argc, char **argv) {
     
     std::cout << '\n' << '\n';
     // A few utilities variables for the SCF cycle
-    std::vector<mrcpp::CompFunction<3>> Psi_2c_next(2, mra);    // -> This will hold the next iteration of the spinor
+    Orbital_Pointer_List Spin_orbitals_next = {
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr};   // -> This will hold the next iteration of the spinor
     mrcpp::CompFunction<3> Psi_2c_diff_top(mra);                // -> This will hold the difference between the 2 spinors for the TOP component
     mrcpp::CompFunction<3> Psi_2c_diff_bottom(mra);             // -> This will hold the difference between the 2 spinors for the BOTTOM component
     
     
-    int max_cycle = 9;
-    std::cout << "Initializing variables for the SCF cycle...";
-    mrcpp::PoissonOperator P(mra, building_precision);
-    
 
+
+    int max_cycle = 9;
     
-    Update_SCF_Variables(mra, D, Psi_2c, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, J_function_tree, P);
-    std::cout << " done!" << '\n' << '\n';
- // ==================================================================================================================================
+    
+    
+    //===============================================================================
 
  
 
@@ -279,9 +464,9 @@ int main(int argc, char **argv) {
     std::vector<int> cycle_values;
 
     
+exit(0);
 
-
-    while (norm_diff > epsilon) {
+    while (norm_diff_max > epsilon) {
         num_cycle++;    
         std::cout << "************************************************************" << '\n';
         std::cout << "> CYCLE " << num_cycle << " STARDED:" << '\n' << '\n';
@@ -290,7 +475,13 @@ int main(int argc, char **argv) {
         if (verbose) {
             std::cout << "$ STARTING TO COMPUTE THE ENERGY..." << '\n'<< '\n';
         }
-        compute_energy_ZORA(mra, Nabla_Psi_2c, K_tree, Nabla_K_tree, Psi_2c, core_el_tree, J_function_tree, E_tot, E_Psi);
+        Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
+        std::cout << '\t' <<  "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << '\n';
+        E_tot = std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0);
+        std::cout << '\t' <<  "Total energy of the system = " << E_tot << '\n';
+        std::cout << '\t' <<  "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << '\n';
+
+
         
 
         // Apply the Helmholtz operator
@@ -298,54 +489,31 @@ int main(int argc, char **argv) {
         if (verbose) {
             std::cout << "$ STARTING TO COMPUTE NEXT ITERATION'S WAVEFUNCTION..." << '\n'<< '\n';
         }
+        //apply_Helmholtz_ZORA_all_electrons(mra, F_matrix, Spin_orbitals, Spinor_gradients, Nabla_Kappa_tree, Potential_tree, Kappa_tree, Kappa_inverted_tree, E_tot, norm_difference_list);
+        norm_diff_max = *std::max_element(norm_difference_list.begin(), norm_difference_list.end());
+        
+        
+        
 
-        
-        apply_Helmholtz_ZORA(mra, Psi_2c, Nabla_Psi_2c, Nabla_K_tree, Potential_tree, K_tree, K_inverted_tree, E_Psi , Psi_2c_next);
-        
-
-        
-        if (debug){
-        std::cout << "BEFORE RENORMALIZATION" << '\n';
-        std::cout << '\t' << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
-        std::cout << '\t' << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
-        }
         if (verbose) {
             std::cout << "$ RENORMALIZING THE WAVEFUNCTION..." << '\n' << '\n';
         }
         // Renormalize the spinor Psi_2c_next
-        Renormalize_Spinor(Psi_2c_next);
         
-        if (debug){
-        std::cout << "AFTER RENORMALIZATION" << '\n';
-        std::cout << '\t' << "Psi_2c_next[0] square norm = " << Psi_2c_next[0].getSquareNorm() << '\n';
-        std::cout << '\t' << "Psi_2c_next[1] square norm = " << Psi_2c_next[1].getSquareNorm() << '\n';
         
-        // Debug, check Psi_2c norm:
-        std::cout << "Norm of the spinor" << '\n';
-        std::cout << '\t' << "Psi_2c[0] square norm = " << Psi_2c[0].getSquareNorm() << '\n';
-        std::cout << '\t' << "Psi_2c[1] square norm = " << Psi_2c[1].getSquareNorm() << '\n';
-        }
         
 
       
         if (verbose) {
             std::cout << "$ COMPUTING THE DIFFERENCE BETWEEN THE 2 ITERATIONS..." << '\n' << '\n';
         }
-        // Compute the difference between the 2 spinors
-        mrcpp::add(Psi_2c_diff_top, 1.0, Psi_2c[0] , -1.0, Psi_2c_next[0] ,building_precision, false);
-        mrcpp::add(Psi_2c_diff_bottom, 1.0, Psi_2c[1] , -1.0, Psi_2c_next[1] ,building_precision, false);
 
-        if (debug){
-        std::cout << "Norm of the difference" << '\n';
-        std::cout << '\t' << "Psi_2c_diff[0] square norm = " << Psi_2c_diff_top.getSquareNorm() << '\n';
-        std::cout << '\t' << "Psi_2c_diff[1] square norm = " << Psi_2c_diff_bottom.getSquareNorm() << '\n';
-        }
 
         
 
-        norm_diff = std::sqrt(Psi_2c_diff_top.getSquareNorm() + Psi_2c_diff_bottom.getSquareNorm());
+        
         std::cout << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" << '\n';
-        std::cout << "@ Norm of the difference = " << norm_diff << " @" << '\n';
+        std::cout << "@ Norm of the difference = " << norm_diff_max << " @" << '\n';
         std::cout << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" << '\n';
         std::cout << '\n';
 
@@ -360,16 +528,16 @@ int main(int argc, char **argv) {
 
 
         
-        Update_SCF_Variables(mra, D, Psi_2c_next, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, J_function_tree, P);
+        //Update_SCF_Variables(mra, D, Psi_2c_next, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, J_function_tree, P);
         std::cout<< "SCF variables updated!" << '\n' << '\n';
         // Update the Psi_2c
-        Psi_2c.swap(Psi_2c_next);
+        //Psi_2c.swap(Psi_2c_next);
         //Psi_2c_next.clear();
         //Psi_2c_diff.clear();
 
         // Store all the values for the SCF cycle
         E_values.push_back(E_tot);
-        norm_diff_values.push_back(norm_diff);
+        norm_diff_values.push_back(norm_diff_max);
         cycle_values.push_back(num_cycle);
 
         std::cout << "Last cleanup, MOVING ON TO THE NEXT CYCLE!" << '\n' << '\n';
@@ -382,9 +550,7 @@ int main(int argc, char **argv) {
             exit(0);
         }
         
-
-
-    }
+}
 
 
 
@@ -403,7 +569,7 @@ int main(int argc, char **argv) {
     }
     std::cout << '\n' << '\n' << "Non relativistic energuy for He atom" << '\n';
     std::cout << "*************************************************************" << '\n';
-    compute_He_energy(mra, *He_NR_Solution.CompD[0], *core_el_tree.CompD[0], mu, E_tot);
+    //(mra, *He_NR_Solution.CompD[0], *core_el_tree.CompD[0], mu, E_tot);
     std::cout << "*************************************************************" << '\n';
 
     print::footer(0, timer, 2);

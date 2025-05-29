@@ -16,6 +16,8 @@
 #include "../api/MWOperators"
 
 
+// THIS IS ONLY FOR HELIUM
+
 void Update_SCF_Variables(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, std::vector<mrcpp::CompFunction<3>> &Psi_2c, CompFunction<3> &V_electron_nucleus ,std::vector<std::vector<mrcpp::CompFunction<3> *>> &Nabla_Psi_2c,CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree, CompFunction<3> &K_inverse, CompFunction<3> &V, CompFunction<3> &J, mrcpp::PoissonOperator &P){
     // Updating the Nabla_Psi_2c
     //std::cout << "--------------UPDATING GRADIENT--------------" << '\n';

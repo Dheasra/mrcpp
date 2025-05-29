@@ -334,6 +334,8 @@ double compute_energy_ZORA(MultiResolutionAnalysis<3> &MRA, std::vector<std::vec
 
     // IF the enery is above zero it stops the program
     if (total_energy.real() > 0){
+        std::cout << "Energy = " << total_energy.real() << '\n';
+        std::cout << "--------------------------------------------------" << '\n';
         std::cout << "Energy is above zero, stopping the program" << '\n';
         exit(1);
     }
