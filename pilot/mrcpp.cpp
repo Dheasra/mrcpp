@@ -10,13 +10,27 @@
 #include "../api/Plotter"
 #include "../api/MWFunctions"
 #include "../api/MWOperators"
+#include <fstream>
+#include <iostream>
 
-
+void print_memory_usage() {
+    std::ifstream statm("/proc/self/statm");
+    long size, resident;
+    statm >> size >> resident;
+    std::cout << "Virtual Memory: " << 0.000001*size * 4 << " GB\t";
+    std::cout << "Resident Set Size: " << 0.000001*resident * 4 << " GB\n";
+}
 
 using namespace mrcpp;
 using Orbital_Pointer_List = std::vector<std::vector<mrcpp::CompFunction<3>>*>;
 using Spinor_CompFunction = std::vector<mrcpp::CompFunction<3>>;
 using Spinor_gradients_pointer_list = std::vector<std::vector<std::vector<mrcpp::CompFunction<3>*>>>;
+
+
+
+
+
+
 
 // DEBUG
 bool debug = false;
@@ -52,6 +66,109 @@ static std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3>
 #include "Be_Update_var.h"
 #include "Smeared_potential.h"
 //#include "ZORA_utilities.h"
+
+
+
+
+
+
+
+void SCF_Cycle_ZORA(MultiResolutionAnalysis<3> &MRA, 
+    Orbital_Pointer_List &Spin_orbitals, 
+    mrcpp::CompFunction<3> &core_el_tree, 
+    std::vector<std::vector<mrcpp::CompFunction<3> *>> &J_ij, 
+    Spinor_CompFunction &J_ij_T,
+    Spinor_CompFunction &J_ij_B,
+    Spinor_CompFunction &K_ij_T, 
+    Spinor_CompFunction &K_ij_B,
+    mrcpp::PoissonOperator &P,
+    double &Orbital_energy,
+    double &norm_diff_max) {
+
+        CompFunction<3> Kappa_tree(MRA);
+        CompFunction<3> Kappa_inverted_tree(MRA);
+        std::vector<mrcpp::CompFunction<3> *> Nabla_Kappa_tree(3,new mrcpp::CompFunction<3>(MRA));
+
+        CompFunction<3> Mean_field_potential(MRA);
+        project(Mean_field_potential, zero, building_precision); // Initialize the potential to zero
+
+        Spinor_gradients_pointer_list Spinor_gradients(4, std::vector<std::vector<mrcpp::CompFunction<3>*>>(2, std::vector<mrcpp::CompFunction<3>*>(3, nullptr)));
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                for (int k = 0; k < 3; ++k) {
+                    Spinor_gradients[i][j][k] = new mrcpp::CompFunction<3>(MRA);
+                }
+            }
+        }
+
+        std::vector<double> Energy_eigenvalues(4, 0.0);
+        std::vector<std::vector<std::complex<double>>> F_matrix(4, std::vector<std::complex<double>>(4, std::complex<double>(0.0, 0.0)));
+        std::vector<double> norm_difference_list(4, 0.0);
+
+        print_memory_usage();
+        std::cout << "-> Orthonormlizing Spin Orbitals" << '\n';
+        orthonormalize_orbitals(Spin_orbitals, MRA);
+        print_memory_usage();
+        // Initialize the variables for the SCF cycle
+        std::cout << "-> Calculating the Exchange contributions" << '\n';
+        print_memory_usage();
+        K_Psi(K_ij_T,K_ij_B, Spin_orbitals, MRA, P);
+        std::cout << "-> Calculating the Coulomb contributions" << '\n';
+        print_memory_usage();
+        J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  MRA, P);
+        std::cout << "-> Calculating the gradients of the Spinors" << '\n';
+        Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, MRA);
+        print_memory_usage();
+        std::cout << "-> Calculating the Kappa tree and its gradient" << '\n';
+        Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,MRA, core_el_tree, Mean_field_potential);
+        print_memory_usage();
+    
+
+        std::cout << "-> Updating the Fock matrix" << '\n';
+        Update_Fock(Energy_eigenvalues, F_matrix, MRA, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
+        print_memory_usage();
+        // Display the energy
+        std::cout << '\t' <<  "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << '\n';
+        Orbital_energy = 0.0;
+        Orbital_energy = std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0);
+        std::cout << '\t' <<  "Total energy of the system = " << Orbital_energy << '\n';
+        std::cout << '\t' <<  "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << '\n';
+        std::cout << '\n' << '\n';
+        std::cout << "Energies of the orbitals:" << '\n';
+        for (const auto &energy : Energy_eigenvalues) {
+            std::cout << energy << '\n';
+        }
+
+        
+        std::cout << "-> Applying the Helmholtz operator to the Spinors" << '\n';
+        apply_Helmholtz_ZORA_all_electrons(MRA, F_matrix, Spin_orbitals, Spinor_gradients, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B, Nabla_Kappa_tree, Kappa_tree, Kappa_inverted_tree, norm_difference_list);
+        print_memory_usage();
+        // Retrieve the maximum element of the norm_difference_list
+        norm_diff_max = *std::max_element(norm_difference_list.begin(), norm_difference_list.end());
+        
+
+        //Delete the Spinor_gradients
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 2; ++j) {
+                for (int k = 0; k < 3; ++k) {
+                    Spinor_gradients[i][j][k]->free();
+                    delete Spinor_gradients[i][j][k];
+                }
+            }
+        }
+        // Delete the Nabla_Kappa_tree
+        for (auto &nabla_kappa : Nabla_Kappa_tree) {
+            nabla_kappa->free();
+            delete nabla_kappa;
+        }
+
+
+
+
+}
+
+
+
 
 /*
  * ==================================================================================================================================
@@ -165,6 +282,7 @@ int main(int argc, char **argv) {
         auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
         double alpha = 4.0;
         return std::exp(-alpha*R);
+        //return std::exp(-alpha*R*R);
     };
 
     std::function<double(const Coord<3> &x)> Be_2s = [] (const mrcpp::Coord<3> &r) -> double {
@@ -172,8 +290,10 @@ int main(int argc, char **argv) {
         double alpha = 1.7;
         double pref = 1-alpha*R;
         return  pref * std::exp(-0.5 *alpha*R);
+        //return   std::exp(-0.5 *alpha*R*R);
     };
 
+    
 
 
     
@@ -239,6 +359,16 @@ int main(int argc, char **argv) {
     };
 
 
+
+
+    
+
+
+    
+/*     orthonormalize_orbitals(Spin_orbitals,mra);
+
+    
+
     // Now we normalize all spin orbitals
     for (auto &orbital : Spin_orbitals) {
         Renormalize_Spinor(*orbital);
@@ -247,7 +377,12 @@ int main(int argc, char **argv) {
         std::cout << '\n';
     }
    
+ */  
     
+
+    
+
+
 
 
     
@@ -311,88 +446,114 @@ int main(int argc, char **argv) {
    
 
     PoissonOperator P(mra, building_precision);
-    K_Psi(K_ij_T,K_ij_B, Spin_orbitals, mra, P);
-    std::cout << "K_ij_T and K_ij_B computed." << '\n';
-    J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  mra, P);
-    std::cout << "J_ij computed." << '\n';
-    Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, mra);
 
 
 
-    Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,mra, core_el_tree, Mean_field_potential);
+    
+
+    //K_Psi(K_ij_T,K_ij_B, Spin_orbitals, mra, P);
+    //std::cout << "K_ij_T and K_ij_B computed." << '\n';
+    //std::cout << '\n' << '\n';
+    //J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  mra, P);
+    //std::cout << "J_ij computed." << '\n';
+    //std::cout << '\n' << '\n';
+    //Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, mra);
+    //std::cout << '\n' << '\n';
+
+
+
+    //Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,mra, core_el_tree, Mean_field_potential);
+    //std::cout << '\n' << '\n';
 
 //    std::cout << "kin 1s" << - 0.5 * compute_Term1_T_ZORA(mra, Spinor_gradients[0], Kappa_tree, *Spin_orbitals[0]) << '\n';
 //    std::cout << "Spinor gradients computed." << '\n';
 
 
 
-    std::cout << "Kappa tree and Nabla Kappa tree computed." << '\n';
-    Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
-    std::cout << "Fock matrix computed." << '\n';
+    //std::cout << "Kappa tree and Nabla Kappa tree computed." << '\n';
+    //Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
+    //std::cout << '\n' << '\n';
+    //std::cout << "Fock matrix computed." << '\n';
    
 
-    std::cout<< '\n';
-    std::cout<< '\n';
-    std::cout << "Fock matrix:" << '\n';
-    for (const auto &row : F_matrix) {
-        for (const auto &elem : row) {
-            std::cout << elem << " ";
-        }
-        std::cout << '\n';
-    }
-    std::cout<< '\n';
-    std::cout<< '\n';
+    //std::cout<< '\n';
+    //std::cout<< '\n';
+    //std::cout << "Fock matrix:" << '\n';
+    //for (const auto &row : F_matrix) {
+    //    for (const auto &elem : row) {
+    //        std::cout << elem << " ";
+    //    }
+    //    std::cout << '\n';
+    //}
+    //std::cout<< '\n';
+    //std::cout<< '\n';
 
-    std::cout << "Energy eigenvalues:" << '\n'; 
-    for (const auto &energy : Energy_eigenvalues) {
-        std::cout << energy << '\n';
-    }
+    //std::cout << "Energy eigenvalues:" << '\n'; 
+    //for (const auto &energy : Energy_eigenvalues) {
+    //    std::cout << energy << '\n';
+    //}
     
 
-    std::cout << '\n' << '\n';
-    std::cout << "************************************************************"  << '\n';
-    std::cout << "Tot energy of the system = " << std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0) << '\n';
-    std::cout << "************************************************************" << '\n' << '\n';
+    //std::cout << '\n' << '\n';
+    //std::cout << "************************************************************"  << '\n';
+    //std::cout << "Tot energy of the system = " << std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0) << '\n';
+    //std::cout << "************************************************************" << '\n' << '\n';
 
     std::vector<double> norm_difference_list(4,0.0);
 
-    apply_Helmholtz_ZORA_all_electrons(mra, F_matrix, Spin_orbitals, Spinor_gradients, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B, Nabla_Kappa_tree, Kappa_tree, Kappa_inverted_tree, norm_difference_list);
+    //apply_Helmholtz_ZORA_all_electrons(mra, F_matrix, Spin_orbitals, Spinor_gradients, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B, Nabla_Kappa_tree, Kappa_tree, Kappa_inverted_tree, norm_difference_list);
+    //std::cout << '\n' << '\n';
 
 
-    std::cout << "New psi norms:" << '\n';
-    for (int i = 0; i < 4; ++i) {
-        std::cout << "Psi_2c_" << i << "[0] norm = " << (*Spin_orbitals[i])[0].getSquareNorm() << '\t';
-        std::cout << "Psi_2c_" << i << "[1] norm = " << (*Spin_orbitals[i])[1].getSquareNorm() << '\n';
-    }
-
-    for (auto &orbital : Spin_orbitals) {
-        Renormalize_Spinor(*orbital);
-        std::cout << "Spin orbital top norm =" << (*orbital)[0].getSquareNorm() << '\n';
-        std::cout << "Spin orbital bottom norm =" << (*orbital)[1].getSquareNorm() << '\n';
-        std::cout << '\n';
-    }
+    //std::cout << "New psi norms:" << '\n';
+    //for (int i = 0; i < 4; ++i) {
+    //    std::cout << "Psi_2c_" << i << "[0] norm = " << (*Spin_orbitals[i])[0].getSquareNorm() << '\t';
+    //    std::cout << "Psi_2c_" << i << "[1] norm = " << (*Spin_orbitals[i])[1].getSquareNorm() << '\n';
+    //}
 
 
+    //orthonormalize_orbitals(Spin_orbitals, mra);
 
-    K_Psi(K_ij_T,K_ij_B, Spin_orbitals, mra, P);
-    J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  mra, P);
-    Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, mra);
-    Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,mra, core_el_tree, Mean_field_potential);
-    Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
-    std::cout<< '\n';
-    std::cout<< '\n';
-    std::cout << "Energy eigenvalues:" << '\n'; 
-    for (const auto &energy : Energy_eigenvalues) {
-        std::cout << energy << '\n';
-    }
-    std::cout << '\n' << '\n';
-    std::cout << "************************************************************"  << '\n';
-    std::cout << "Tot energy of the system = " << std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0) << '\n';
-    std::cout << "************************************************************" << '\n' << '\n';
+    //std::cout << '\n' << '\n';
+    //std::cout << "New round." << '\n';
+
+    //orthonormalize_orbitals(Spin_orbitals, mra);
+
+    
+    //std::cout << "Orthonormalized orbitals." << '\n';
+    //std::cout << "New psi norms after orthonormalization:" << '\n';
+    //for (int i = 0; i < 4; ++i) {
+    //    std::cout << "Psi_2c_" << i << "[0] norm = " << (*Spin_orbitals[i])[0].getSquareNorm() << '\t';
+    //    std::cout << "Psi_2c_" << i << "[1] norm = " << (*Spin_orbitals[i])[1].getSquareNorm() << '\n';
+    //}
 
 
 
-    exit(0);
+
+    //K_Psi(K_ij_T,K_ij_B, Spin_orbitals, mra, P);
+    //std::cout << '\n' << '\n';
+    //J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  mra, P);
+    //std::cout << '\n' << '\n';
+    //Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, mra);
+    //std::cout << '\n' << '\n';
+    //Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,mra, core_el_tree, Mean_field_potential);
+    //std::cout << '\n' << '\n';
+    //Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
+    //std::cout << '\n' << '\n';
+   //std::cout<< '\n';
+    //std::cout<< '\n';
+    //std::cout << "Energy eigenvalues:" << '\n'; 
+    //for (const auto &energy : Energy_eigenvalues) {
+    //    std::cout << energy << '\n';
+    //}
+    //std::cout << '\n' << '\n';
+    //std::cout << "************************************************************"  << '\n';
+    //std::cout << "Tot energy of the system = " << std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0) << '\n';
+    //std::cout << "************************************************************" << '\n' << '\n';
+
+
+
+
 
 
 
@@ -464,76 +625,89 @@ int main(int argc, char **argv) {
     std::vector<int> cycle_values;
 
     
-exit(0);
 
     while (norm_diff_max > epsilon) {
         num_cycle++;    
         std::cout << "************************************************************" << '\n';
         std::cout << "> CYCLE " << num_cycle << " STARDED:" << '\n' << '\n';
+        
+        SCF_Cycle_ZORA( mra,
+                        Spin_orbitals,
+                        core_el_tree,
+                        J_ij,
+                        J_ij_T,
+                        J_ij_B,
+                        K_ij_T,
+                        K_ij_B,
+                        P,
+                        E_tot,
+                        norm_diff_max);
+
+                    
+
+
+        /*
+        print_memory_usage();
+        std::cout << "-> Orthonormlizing Spin Orbitals" << '\n';
+        orthonormalize_orbitals(Spin_orbitals, mra);
+        print_memory_usage();
+        // Initialize the variables for the SCF cycle
+        std::cout << "-> Calculating the Exchange contributions" << '\n';
+        print_memory_usage();
+        K_Psi(K_ij_T,K_ij_B, Spin_orbitals, mra, P);
+        std::cout << "-> Calculating the Coulomb contributions" << '\n';
+        print_memory_usage();
+        J_Psi(J_ij, Spin_orbitals, Mean_field_potential,  mra, P);
+        std::cout << "-> Calculating the gradients of the Spinors" << '\n';
+        Update_Nabla_Psi_2c(Spinor_gradients, Spin_orbitals, mra);
+        print_memory_usage();
+        std::cout << "-> Calculating the Kappa tree and its gradient" << '\n';
+        Update_Kappa(Kappa_tree, Kappa_inverted_tree, Nabla_Kappa_tree,mra, core_el_tree, Mean_field_potential);
+        print_memory_usage();
+    
 
         // Compute the energy
-        if (verbose) {
-            std::cout << "$ STARTING TO COMPUTE THE ENERGY..." << '\n'<< '\n';
-        }
+        if (verbose) {std::cout << "$ STARTING TO COMPUTE THE ENERGY..." << '\n'<< '\n';}
+
+        std::cout << "-> Updating the Fock matrix" << '\n';
         Update_Fock(Energy_eigenvalues, F_matrix, mra, Spinor_gradients, Kappa_tree, Nabla_Kappa_tree, Spin_orbitals, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B);
+        print_memory_usage();
+        // Display the energy
         std::cout << '\t' <<  "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << '\n';
+        E_tot = 0.0;
         E_tot = std::accumulate(Energy_eigenvalues.begin(), Energy_eigenvalues.end(), 0.0);
         std::cout << '\t' <<  "Total energy of the system = " << E_tot << '\n';
         std::cout << '\t' <<  "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << '\n';
+        std::cout << '\n' << '\n';
+        std::cout << "Energies of the orbitals:" << '\n';
+        for (const auto &energy : Energy_eigenvalues) {
+            std::cout << energy << '\n';
+        }
 
 
-        
 
+
+
+    
         // Apply the Helmholtz operator
-
-        if (verbose) {
-            std::cout << "$ STARTING TO COMPUTE NEXT ITERATION'S WAVEFUNCTION..." << '\n'<< '\n';
-        }
-        //apply_Helmholtz_ZORA_all_electrons(mra, F_matrix, Spin_orbitals, Spinor_gradients, Nabla_Kappa_tree, Potential_tree, Kappa_tree, Kappa_inverted_tree, E_tot, norm_difference_list);
+        if (verbose) {std::cout << "$ STARTING TO COMPUTE NEXT ITERATION'S WAVEFUNCTION..." << '\n'<< '\n';}
+        std::cout << "-> Applying the Helmholtz operator to the Spinors" << '\n';
+        apply_Helmholtz_ZORA_all_electrons(mra, F_matrix, Spin_orbitals, Spinor_gradients, core_el_tree, J_ij_T, J_ij_B, K_ij_T, K_ij_B, Nabla_Kappa_tree, Kappa_tree, Kappa_inverted_tree, norm_difference_list);
+        print_memory_usage();
+        // Retrieve the maximum element of the norm_difference_list
         norm_diff_max = *std::max_element(norm_difference_list.begin(), norm_difference_list.end());
-        
-        
-        
-
-        if (verbose) {
-            std::cout << "$ RENORMALIZING THE WAVEFUNCTION..." << '\n' << '\n';
-        }
-        // Renormalize the spinor Psi_2c_next
-        
-        
-        
-
-      
-        if (verbose) {
-            std::cout << "$ COMPUTING THE DIFFERENCE BETWEEN THE 2 ITERATIONS..." << '\n' << '\n';
-        }
-
-
-        
-
+        */
         
         std::cout << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" << '\n';
         std::cout << "@ Norm of the difference = " << norm_diff_max << " @" << '\n';
         std::cout << "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" << '\n';
         std::cout << '\n';
-
-
-        if (verbose) {
-            std::cout << "$ UPDATING THE VARIABLES FOR THE NEXT ITERATION..." << '\n' << '\n';
-        }
+        
         
         
        
         std::cout << "SCF CYCLE COMPLETED!" << '\n' << '\n';
 
-
-        
-        //Update_SCF_Variables(mra, D, Psi_2c_next, core_el_tree, Nabla_Psi_2c, K_tree, Nabla_K_tree, K_inverted_tree, Potential_tree, J_function_tree, P);
-        std::cout<< "SCF variables updated!" << '\n' << '\n';
-        // Update the Psi_2c
-        //Psi_2c.swap(Psi_2c_next);
-        //Psi_2c_next.clear();
-        //Psi_2c_diff.clear();
 
         // Store all the values for the SCF cycle
         E_values.push_back(E_tot);

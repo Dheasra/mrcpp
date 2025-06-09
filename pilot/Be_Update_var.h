@@ -20,6 +20,128 @@
 
 
 
+void orthonormalize_orbitals(Orbital_Pointer_List &Psi_list, MultiResolutionAnalysis<3> &MRA){
+    // This function will orthonormalize the orbitals in Psi_list
+    // The orbitals are given by Psi_list[i][0] and Psi_list[i][1]
+    // The orbitals are orthonormalized using the Gram-Schmidt process
+    
+    // Create CompFunctionVector for top and bottom components
+    CompFunctionVector Psi_top_components;
+    CompFunctionVector Psi_bottom_components;
+
+    
+
+    //std::cout << "Trying to orthonormalize orbitals..." << '\n';
+    
+   
+    for (const auto &orbital : Psi_list) {
+        Psi_top_components.push_back((*orbital)[0]);
+        Psi_bottom_components.push_back((*orbital)[1]);
+    }
+
+
+
+    if (debug){
+        std::cout << "Are the orbitals real?" << '\n';
+        for (const auto &orbital : Psi_list) {
+            std::cout << "Spin orbital top/bot isreal = " << (*orbital)[0].isreal() << '\t';
+            std::cout << (*orbital)[1].isreal() << '\n';
+            std::cout << "Spin orbital top/bot complex = " << (*orbital)[0].iscomplex() << '\t';
+            std::cout << (*orbital)[1].iscomplex() << '\n';
+        }
+
+        std::cout << "S MATRIX BEFORE ORTHONORMALIZATION:" << '\n';
+        std::cout << "After applying Lowdin matrix, new S matrix:" << '\n';
+        ComplexMatrix S_t = calc_overlap_matrix(Psi_top_components);
+        ComplexMatrix S_b = calc_overlap_matrix(Psi_bottom_components);
+        std::cout << "S top matrix:" << '\n';
+        std::cout << S_t << '\n';
+        std::cout << "S bottom matrix:" << '\n';
+        std::cout << S_b << '\n';
+        std::cout << "Norms of the spin orbitals after applying Lowdin matrix:" << '\n';
+        ComplexMatrix S_tot = S_t + S_b;
+        std::cout << "S total matrix:" << '\n';
+        std::cout << S_tot << '\n' <<'\n';
+    }
+
+    
+
+
+    ComplexMatrix Lowdin_matrix = calc_lowdin_matrix_2c(Psi_top_components, Psi_bottom_components);
+    std::vector<ComplexDouble> Lowdin_matrix_row(4);
+
+    if (debug){
+        std::cout << "Lowdin matrix:" << '\n';
+        std::cout << Lowdin_matrix << '\n';
+    }
+
+    CompFunctionVector Diagonal_Psi_top_components(4);
+    CompFunctionVector Diagonal_Psi_bottom_components(4);
+
+    for (int i = 0; i < 4; i++) {
+        // Apply the Lowdin matrix to the top and bottom components
+        Lowdin_matrix_row.assign(Lowdin_matrix.row(i).begin(), Lowdin_matrix.row(i).end());
+        if (debug){
+            std::cout << "Lowdin matrix row " << i << ":" << '\n';
+            for (const auto &val : Lowdin_matrix_row) {
+                std::cout << val << '\n';
+            }
+            std::cout << '\n';
+        }
+        linear_combination(Diagonal_Psi_top_components[i], Lowdin_matrix_row, Psi_top_components, building_precision);
+        linear_combination(Diagonal_Psi_bottom_components[i], Lowdin_matrix_row, Psi_bottom_components, building_precision);
+    }
+
+
+    for (int i = 0; i < 4; i++) {
+        // Update the Psi_list with the new components
+        (*Psi_list[i])[0] = Diagonal_Psi_top_components[i];
+        (*Psi_list[i])[1] = Diagonal_Psi_bottom_components[i];
+    }
+    
+    if (debug){
+        Psi_top_components.clear();
+        Psi_bottom_components.clear();
+        std::cout << "After applying Lowdin matrix, new S matrix:" << '\n';
+        for (const auto &orbital : Psi_list) {
+            Psi_top_components.push_back((*orbital)[0]);
+            Psi_bottom_components.push_back((*orbital)[1]);
+        }
+        ComplexMatrix S_t = calc_overlap_matrix(Psi_top_components);
+        ComplexMatrix S_b = calc_overlap_matrix(Psi_bottom_components);
+        std::cout << "S top matrix:" << '\n';
+        std::cout << S_t << '\n';
+        std::cout << "S bottom matrix:" << '\n';
+        std::cout << S_b << '\n';
+        std::cout << "Norms of the spin orbitals after applying Lowdin matrix:" << '\n';
+        ComplexMatrix S_tot = S_t + S_b;
+        std::cout << "S total matrix:" << '\n';
+        std::cout << S_tot << '\n';
+        std::cout << "Norms of the spin orbitals after applying Lowdin matrix:" << '\n';
+        
+
+
+        for (const auto &orbital : Psi_list) {
+            std::cout << "Spin orbital top/bot norm =" << (*orbital)[0].getSquareNorm() << '\t';
+            std::cout << (*orbital)[1].getSquareNorm() << '\n';
+            Renormalize_Spinor(*orbital);
+            std::cout << "Spin orbital top/bot norm AR =" << (*orbital)[0].getSquareNorm() << '\t';
+            std::cout << (*orbital)[1].getSquareNorm() << '\n';
+            std::cout << '\n';
+        }
+    }
+
+    debug = false;
+
+
+}
+
+
+
+
+
+
+
 void make_density_spinor(Spinor_CompFunction &Psi_2c, MultiResolutionAnalysis<3> &MRA, FunctionTree<3,double> &Rho){
     // This function will create the density for the spinor
     // The density is given by:
@@ -54,7 +176,7 @@ void make_density_spinor_separate_components(Spinor_CompFunction &Psi_2c, MultiR
 
 
 
-void Update_Nabla_Psi_2c(Spinor_gradients_pointer_list &Nabla_Psi_list, Orbital_Pointer_List &Psi_list, MultiResolutionAnalysis<3> &MRA){
+void Update_Nabla_Psi_2c(Spinor_gradients_pointer_list &Nabla_Psi_list, Orbital_Pointer_List Psi_list, MultiResolutionAnalysis<3> &MRA){
     // This function will update the Nabla_Psi_2c vector with the new Psi_2c vector
     // The Nabla_Psi_2c vector is a vector of vectors of CompFunction, where each vector corresponds to a component of the spinor
     // The first vector corresponds to the top component and the second vector corresponds to the bottom component
@@ -62,19 +184,48 @@ void Update_Nabla_Psi_2c(Spinor_gradients_pointer_list &Nabla_Psi_list, Orbital_
     //Define the derivsative operator
     ABGVOperator D(MRA, 1.0, 1.0);
 
-    for (int i=0; i<4; i++){
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (Nabla_Psi_list[i][0][j]) {
+                Nabla_Psi_list[i][0][j]->free(); // Clear the previous values
+                delete Nabla_Psi_list[i][0][j];  // Delete the object
+                Nabla_Psi_list[i][0][j] = nullptr; // Nullify the pointer
+            }
+            if (Nabla_Psi_list[i][1][j]) {
+                Nabla_Psi_list[i][1][j]->free(); // Clear the previous values
+                delete Nabla_Psi_list[i][1][j];  // Delete the object
+                Nabla_Psi_list[i][1][j] = nullptr; // Nullify the pointer
+            }
+        }
+        Nabla_Psi_list[i][0].clear(); // Clear the inner vector
+        Nabla_Psi_list[i][1].clear(); // Clear the inner vector
+    }
+    Nabla_Psi_list.clear(); // Clear the outer container
+
+    std::cout << "Nabla_Psi_list clearedand resized." << '\n';
+
+
+
+    Nabla_Psi_list.clear(); // Clear the outer container
+    Nabla_Psi_list.resize(4, std::vector<std::vector<mrcpp::CompFunction<3> *>>(2, std::vector<mrcpp::CompFunction<3> *>(3, nullptr)));
+
+
+    std::vector<mrcpp::CompFunction<3> *> tmp1(3);
+    std::vector<mrcpp::CompFunction<3> *> tmp2(3);
+
+
+
+    for (int i = 0; i < 4; i++) {
         Nabla_Psi_list[i][0] = gradient(D, (*Psi_list[i])[0]);
         Nabla_Psi_list[i][1] = gradient(D, (*Psi_list[i])[1]);
+        
         // Debug print
         //std::cout << "Psi[" << i << "] gradient TOP (x,y,z) " << Nabla_Psi_list[i][0][0]->getSquareNorm() << '\t' << Nabla_Psi_list[i][0][1]->getSquareNorm() << '\t' << Nabla_Psi_list[i][0][2]->getSquareNorm() << '\n';
         //std::cout << "Psi[" << i << "] gradient BOT (x,y,z) " << Nabla_Psi_list[i][1][0]->getSquareNorm() << '\t' << Nabla_Psi_list[i][1][1]->getSquareNorm() << '\t' << Nabla_Psi_list[i][1][2]->getSquareNorm() << '\n';
     }
-    
+    Nabla_Psi_list.shrink_to_fit(); // Optional: shrink the vector to fit the new size
 }
-
-
-
-void K_Psi(std::vector<mrcpp::CompFunction<3>> &K_ij_T, std::vector<mrcpp::CompFunction<3>> &K_ij_B, Orbital_Pointer_List &Psi_k, MultiResolutionAnalysis<3> &MRA, PoissonOperator &P){
+void K_Psi(std::vector<mrcpp::CompFunction<3>> &K_ij_T, std::vector<mrcpp::CompFunction<3>> &K_ij_B, Orbital_Pointer_List Psi_k, MultiResolutionAnalysis<3> &MRA, PoissonOperator &P){
     // THIS FUNCTION WILL EVALUATE ALL THE K |PSI> FOR THE 4 SPINORS
 
     // Variable declaration
@@ -99,7 +250,7 @@ void K_Psi(std::vector<mrcpp::CompFunction<3>> &K_ij_T, std::vector<mrcpp::CompF
     std::vector<mrcpp::FunctionTree<3, ComplexDouble> *> K_i__j_TOP_ComplexFuncTree(4);
     std::vector<mrcpp::FunctionTree<3, ComplexDouble> *> K_i__j_BOT_ComplexFuncTree(4);
 
-    bool fetch_complex = false;
+    
     
     
     for (int i=0; i<4; i++){
@@ -109,52 +260,29 @@ void K_Psi(std::vector<mrcpp::CompFunction<3>> &K_ij_T, std::vector<mrcpp::CompF
             // OL_ij(r) = \Psi^*_j(r) * \Psi_i(r)
             multiply(Overlap_t_C[j], (*Psi_k[j])[0], (*Psi_k[i])[0], building_precision, false, false, true);
             multiply(Overlap_b_C[j], (*Psi_k[j])[1], (*Psi_k[i])[1], building_precision, false, false, true);
+            if (debug){
             std::cout << "---------------------------------------------------------------------------" << '\n';
             std::cout << "[i] = " << i << '\n';
             std::cout << "Overlap_t_C[" << j << "] = " << Overlap_t_C[j].getSquareNorm() << '\n';
             std::cout << "Overlap_b_C[" << j << "] = " << Overlap_b_C[j].getSquareNorm() << '\n';
-            
+            }
             // Add them together 
             // OL_tot_ij(r) = [\PsiT^*_j(r) * \PsiT_i(r)] + [\PsiB^*_j(r) * \PsiB_i(r)]
             add(Overlap_tot[j], 1.0, Overlap_t_C[j], 1.0, Overlap_b_C[j], building_precision);
-            std::cout << "Overlap_tot[" << j << "] = " << Overlap_tot[j].getSquareNorm() << '\n';
+            
+            if (debug){std::cout << "Overlap_tot[" << j << "] = " << Overlap_tot[j].getSquareNorm() << '\n';}
             
             // Convolute the density
             // Conv_ij(r) = \int OL_tot_ij(r') / \abs{r-r'} dr'
             apply(building_precision, Convoluted[j], P, Overlap_tot[j]);
-            std::cout << "Convoluted[" << j << "] = " << Convoluted[j].getSquareNorm() << '\n';
+            if (debug){std::cout << "Convoluted[" << j << "] = " << Convoluted[j].getSquareNorm() << '\n';}
 
             // Now i multiply each integral by the corresponding spinor
             multiply(K_i__j_TOP[j], Convoluted[j], (*Psi_k[j])[0], building_precision, false, false, false);
             multiply(K_i__j_BOT[j], Convoluted[j], (*Psi_k[j])[1], building_precision, false, false, false);
 
-            std::cout << "K_["<<i << j << "] = " << K_i__j_TOP[j].getSquareNorm() << '\t' << K_i__j_BOT[j].getSquareNorm() << '\n';
+            if (debug){std::cout << "K_["<<i << j << "] = " << K_i__j_TOP[j].getSquareNorm() << '\t' << K_i__j_BOT[j].getSquareNorm() << '\n';}
 
-            
-            // Now i put the corresponding tree pointer in the vector to sum them up later
-            if (K_i__j_TOP[j].iscomplex()){
-                K_i__j_TOP_ComplexFuncTree[j] = K_i__j_TOP[j].CompC[0];
-                fetch_complex = true;
-            }
-            else if (K_i__j_TOP[j].isreal()){
-                K_i__j_TOP_RealFuncTree[j] = K_i__j_TOP[j].CompD[0];
-                fetch_complex = false;
-            }
-            else{
-                //std::cout << "K_i__j_TOP[j] is neither complex nor real" << '\n';
-            }
-
-            if (K_i__j_BOT[j].iscomplex()){
-                K_i__j_BOT_ComplexFuncTree[j] = K_i__j_BOT[j].CompC[0];
-                fetch_complex = true;
-            }
-            else if (K_i__j_TOP[j].isreal()){
-                K_i__j_BOT_RealFuncTree[j] = K_i__j_BOT[j].CompD[0];
-                fetch_complex = false;
-            }
-            else{
-                //std::cout << "K_i__j_TOP[j] is neither complex nor real" << '\n';
-            }
         }   
 
         //std::cout << '\n';
@@ -164,35 +292,20 @@ void K_Psi(std::vector<mrcpp::CompFunction<3>> &K_ij_T, std::vector<mrcpp::CompF
         //std::cout << "K_" << i << "2 top / bottom = " << K_i__j_TOP[2].getSquareNorm() << '\t' << K_i__j_BOT[2].getSquareNorm() << '\n';
         //std::cout << "K_" << i << "3 top / bottom = " << K_i__j_TOP[3].getSquareNorm() << '\t' << K_i__j_BOT[3].getSquareNorm() << '\n' << '\n';
         
-
+        std::vector<ComplexDouble> Fourier_Coefficients(4, ComplexDouble(1.0, 0.0));
+        linear_combination(K_ij_T[i], Fourier_Coefficients, K_i__j_TOP, building_precision);
+        linear_combination(K_ij_B[i], Fourier_Coefficients, K_i__j_BOT, building_precision);
         
-        if (fetch_complex){
-            // sum all the entries of the vector of FunctionTree getting the total density for top and bottom
-            mrcpp::add(building_precision,  *K_ij_T[i].CompC[0], K_i__j_TOP_ComplexFuncTree);
-            mrcpp::add(building_precision,  *K_ij_B[i].CompC[0], K_i__j_BOT_ComplexFuncTree);
-        }
-        else{
-            // sum all the entries of the vector of FunctionTree getting the total density for top and bottom
-            mrcpp::add(building_precision,  *K_ij_T[i].CompD[0], K_i__j_TOP_RealFuncTree);
-            std::cout << "K_Psi_k[" << i << "][0] = " << K_ij_T[i].getSquareNorm() << '\n'; 
-            mrcpp::add(building_precision,  *K_ij_B[i].CompD[0], K_i__j_BOT_RealFuncTree);
-
-            
-            std::cout << "K_Psi_k[" << i << "][1] = " << K_ij_B[i].getSquareNorm() << '\n' << '\n';
-            std::cout << '\n';
-            
-            
-
-        }
         
     }
 
     //Print the norms for K top and bottom
+    if (debug){
     std::cout << "K_ij[0] TOP AND BOT = " << K_ij_T[0].getSquareNorm() << '\t' << K_ij_B[0].getSquareNorm() << '\n';
     std::cout << "K_ij[1] TOP AND BOT = " << K_ij_T[1].getSquareNorm() << '\t' << K_ij_B[1].getSquareNorm() << '\n';
     std::cout << "K_ij[2] TOP AND BOT = " << K_ij_T[2].getSquareNorm() << '\t' << K_ij_B[2].getSquareNorm() << '\n';
     std::cout << "K_ij[3] TOP AND BOT = " << K_ij_T[3].getSquareNorm() << '\t' << K_ij_B[3].getSquareNorm() << '\n';
-
+    }
 
 
 
@@ -206,10 +319,9 @@ void K_Psi(std::vector<mrcpp::CompFunction<3>> &K_ij_T, std::vector<mrcpp::CompF
 
 
 
-
-void J_Psi(std::vector<std::vector<mrcpp::CompFunction<3>*>> &J_Psi_k, Orbital_Pointer_List &Psi_k, CompFunction<3> Mean_field_potential, MultiResolutionAnalysis<3> &MRA, PoissonOperator &P){
+void J_Psi(std::vector<std::vector<mrcpp::CompFunction<3>*>> &J_Psi_k, Orbital_Pointer_List Psi_k, CompFunction<3> Mean_field_potential, MultiResolutionAnalysis<3> &MRA, PoissonOperator &P){
     // THIS FUNCTION WILL EVALUATE ALL THE J |PSI> FOR THE 4 SPINORS
-    std::cout << "J_Psi function called" << '\n';
+    //std::cout << "J_Psi function called" << '\n';
     // Variable declaration
     std::vector<FunctionTree<3, double>*> Rho_t(4); // the 4 top components of the density
     std::vector<FunctionTree<3, double>*> Rho_b(4); // the 4 bottom components of the density
@@ -221,7 +333,6 @@ void J_Psi(std::vector<std::vector<mrcpp::CompFunction<3>*>> &J_Psi_k, Orbital_P
     // I'll need these because make_density_local only works with CompFunction, making them some temporary variables
     std::vector<CompFunction<3>> Rho_t_C(4);
     std::vector<CompFunction<3>> Rho_b_C(4);
-    
     for (int k=0; k<4; k++){
         // Store in Rho_t_C and Rho_b_C the density of the top and bottom components
         make_density_local(Rho_t_C[k], (*Psi_k[k])[0], MRA, building_precision);
@@ -235,18 +346,18 @@ void J_Psi(std::vector<std::vector<mrcpp::CompFunction<3>*>> &J_Psi_k, Orbital_P
         //std::cout << "Rho_b_C " << k << " = " << Rho_b_C[k].CompD[0]->getSquareNorm() << '\n';    
     }
 
+
     // sum all the entries of the vector of FunctionTree getting the total density for top and bottom
     mrcpp::add(building_precision, Rho_top_TOT, Rho_t);
     mrcpp::add(building_precision, Rho_bottom_TOT, Rho_b);
     // And sum the two components to get the total density
     mrcpp::add(building_precision, Rho_TOTAL, 1.0, Rho_top_TOT, 1.0, Rho_bottom_TOT);
-    std::cout << "Rho_top_TOT = " << Rho_top_TOT.getSquareNorm() << '\n';
+    //std::cout << "Rho_top_TOT = " << Rho_top_TOT.getSquareNorm() << '\n';
     
     // Convolute the density   
     mrcpp::apply(building_precision, *Mean_field_potential.CompD[0], P, Rho_TOTAL);
-    std::cout << "Mean_field_potential = " << Mean_field_potential.getSquareNorm() << '\n';
+    //std::cout << "Mean_field_potential = " << Mean_field_potential.getSquareNorm() << '\n';
     
-
     // Set every elemeent as the mean field potential times the respective spinors 
     for (int k=0; k<4; k++){
         // J_psi_k = V_mean_field * Psi_k 
@@ -263,165 +374,6 @@ void J_Psi(std::vector<std::vector<mrcpp::CompFunction<3>*>> &J_Psi_k, Orbital_P
 
 
 
-
-
-
-
-void Update_SCF_Variables(MultiResolutionAnalysis<3> &MRA, ABGVOperator<3> &D, std::vector<mrcpp::CompFunction<3>> &Psi_2c, CompFunction<3> &V_electron_nucleus ,std::vector<std::vector<mrcpp::CompFunction<3> *>> &Nabla_Psi_2c,CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree, CompFunction<3> &K_inverse, CompFunction<3> &V, CompFunction<3> &J, mrcpp::PoissonOperator &P){
-    // Updating the Nabla_Psi_2c
-    //std::cout << "--------------UPDATING GRADIENT--------------" << '\n';
-    Nabla_Psi_2c[0] = mrcpp::gradient(D,Psi_2c[0]);
-    Nabla_Psi_2c[1] = mrcpp::gradient(D,Psi_2c[1]);
-    // Print  values
-    if (debug){
-    std::cout << "Nabla_Psi_2c[0] = " << Nabla_Psi_2c[0][0]->getSquareNorm() << "   " <<  Nabla_Psi_2c[0][1]->getSquareNorm() << "   " <<  Nabla_Psi_2c[0][2]->getSquareNorm() << '\n';
-    std::cout << "Nabla_Psi_2c[1] = " << Nabla_Psi_2c[1][0]->getSquareNorm() << "   " <<  Nabla_Psi_2c[1][1]->getSquareNorm() << "   " <<  Nabla_Psi_2c[1][2]->getSquareNorm() << '\n';
-    std::cout << '\n';
-    
-    // Same format, print the pointers
-    std::cout << "Nabla_Psi_2c[0][0] = " << Nabla_Psi_2c[0][0] << "   " << Nabla_Psi_2c[0][1] << "   " << Nabla_Psi_2c[0][2] << '\n';
-    std::cout << "Nabla_Psi_2c[1][0] = " << Nabla_Psi_2c[1][0] << "   " << Nabla_Psi_2c[1][1] << "   " << Nabla_Psi_2c[1][2] << '\n';
-    }
-    //std::cout << "------------------- DONE -------------------" << '\n' << '\n';
-    
-    // Create the Rho_t and Rho_b, then Rho = Rho_t + Rho_b
-    //std::cout << "--------------UPDATING RHO------------------" << '\n';
-    CompFunction<3> Rho_t(MRA);
-    CompFunction<3> Rho_b(MRA);
-    CompFunction<3> Rho(MRA);
-
-
-    //std::cout << "Computing density for TOP component..." << '\n';
-    make_density_local(Rho_t, Psi_2c[0] , MRA, building_precision);
-    //std::cout << "Norm of Rho_top = " << Rho_t.getSquareNorm() << '\n';
-
-  
-    //std::cout << "Computing density for BOTTOM component..." << '\n';
-    make_density_local(Rho_b, Psi_2c[1] , MRA, building_precision);
-    //std::cout << "Norm of Rho_bottom = " << Rho_b.getSquareNorm() << '\n' << '\n';
-  
-
-    mrcpp::add(Rho, 1.0, Rho_t, 1.0, Rho_b, building_precision, false);
-    
-    if ( num_cycle !=0  && (Rho_b.getSquareNorm() == 0.0 || Rho_t.getSquareNorm() == 0.0)) {
-        std::cerr << "Error: Rho_t or Rho_b has zero norm!" << '\n';
-        exit(1);
-        return;
-    }
-
-    //std::cout << "---------------- DONE -------------------" << '\n' << '\n';
-
-    // Calculate the J operator
-    //std::cout << "--------------UPDATING J-----------------" << '\n';
-    //std::cout << "Rho status" << *(Rho.CompD[0]) << '\n';
-    mrcpp::apply(building_precision, J, P, Rho);
-    //std::cout << "Applied the Poisson operator to the density" << '\n';
-    double two_pi = (2.0 * M_PI);
-    J.rescale(ComplexDouble(2.0 ,0.0));  
-    //std::cout << "---------------- DONE -------------------" << '\n' << '\n';
-
-
-    // Compute the full potential
-    //std::cout << "--------------UPDATING V------------------" << '\n';
-    mrcpp::add(V, 1.0, V_electron_nucleus,0.5, J, building_precision, false); // V = V_electron_nucleus + 0.5 J = V_ce(r)+J(r)
-    //std::cout << "V norm = " << V.getSquareNorm() << '\n';
-    //std::cout << "---------------- DONE -------------------" << '\n' << '\n';
-
-
-
-
-
-    // Compute the inverse of K_inverse (that is just the Kappa operator):
-    //std::cout << "--------------UPDATING K_tree------------------" << '\n';
-    double constant = 2.0 * m * c * c;
-    double prefactor = 1/constant;
-
-
-    // Define and project a the function whcih is one everywhere
-    std::function<double(const Coord<3> &x)> one = [] (const mrcpp::Coord<3> &r) -> double {
-        return 1.0;
-    };
-    mrcpp::CompFunction<3> one_tree(MRA);
-    mrcpp::project(one_tree, one, building_precision);
-
-    // Function to calculate Kappa
-    std::function<double(const Coord<3> &x)> K_function_compute = [&V_electron_nucleus, &J, prefactor, &V] (const mrcpp::Coord<3> &r) -> double {
-        double VAL = 1.0 - (prefactor * V.CompD[0]->evalf(r));
-        return (1.0 / VAL) -1.0;   
-    };
-    mrcpp::project(K_tree, K_function_compute, building_precision);
-    //std::cout << "K_tree norm NO MAP= " << K_tree.getSquareNorm() << '\n';
- 
-    K_tree.add(ComplexDouble(1.0,0.0), one_tree); // K_tree = K_tree + 1
-
-    
-    if (debug){
-    std::cout << "K_tree norm = " << K_tree.getSquareNorm() << '\n';
-    std::cout << "K_tree is real = " << K_tree.isreal() << '\n';
-    std::cout << "K_tree is complex = " << K_tree.iscomplex() << '\n';
-    }
-    //std::cout << "---------------- DONE -------------------" << '\n' << '\n';
-
-
-
-
-
-    // Compute the new K tree
-    //std::cout << "-------------UPDATING K_inv---------------" << '\n';
-
-
-    // K_inverse
-    std::function<double(const Coord<3> &x)> K_inverse_function = [&K_tree, &V, prefactor, &V_electron_nucleus, &J] (const mrcpp::Coord<3> &r) -> double {
-        return - (prefactor * (V.CompD[0]->evalf(r)));
-        //return 1.0 / K_tree.CompD[0]->evalf(r);   
-    };
-
-    mrcpp::project(K_inverse, K_inverse_function, building_precision);
-    //add: K_inverse + 1
-    K_inverse.add(ComplexDouble(1.0,0.0), one_tree);
-    
-
-    
-    if (debug){
-    std::cout << "K_inverse norm = " << K_inverse.getSquareNorm() << '\n';
-    std::cout << "K_inverse is real = " << K_inverse.isreal() << '\n';
-    std::cout << "K_inverse is complex = " << K_inverse.iscomplex() << '\n';
-    std::cout << "K_inv Function Tree:" << '\n';
-    std::cout << *(K_inverse.CompD[0]) << '\n';
-    }
-    
-
-
-
-    //std::cout << "---------------- DONE -------------------" << '\n' << '\n';
-
-
-
-    
-
-
-
-    // Compute the Nabla_K_tree
-    //std::cout << "--------------UPDATING Nabla_K_tree------------------" << '\n';
-    Nabla_K_tree = mrcpp::gradient(D,K_tree);
-
-    if (debug){
-    // Print the pointers of the Nabla_K_tree
-    std::cout << "Nabla_K_tree[0] = " << Nabla_K_tree[0] << '\n';
-    std::cout << "Nabla_K_tree[1] = " << Nabla_K_tree[1] << '\n';
-    std::cout << "Nabla_K_tree[2] = " << Nabla_K_tree[2] << '\n' <<'\n';
-    // Now we print the norms
-    std::cout << "Nabla_K_tree[0] norm = " << Nabla_K_tree[0]->getSquareNorm() << '\n';
-    std::cout << "Nabla_K_tree[1] norm = " << Nabla_K_tree[1]->getSquareNorm() << '\n';
-    std::cout << "Nabla_K_tree[2] norm = " << Nabla_K_tree[2]->getSquareNorm() << '\n' <<'\n';
-
-    std::cout << "Nabla_K_tree[0] is real = " << Nabla_K_tree[0]->isreal() << '\n';
-    std::cout << "Nabla_K_tree[0] is complex = " << Nabla_K_tree[0]->iscomplex() << '\n';
-    }
-    //std::cout << "-------------- DONE UPDATING SCF VARIABLES -------------------" << '\n' << '\n';
-
-  
-}
 
 
 
@@ -508,7 +460,7 @@ ComplexDouble compute_Term2_T_ZORA_MEL(MultiResolutionAnalysis<3> &MRA, std::vec
 
 
 
-ComplexDouble compute_Term3_T_ZORA_MEL(MultiResolutionAnalysis<3> &MRA, std::vector<std::vector<mrcpp::CompFunction<3>*>> &Nabla_Psi_2c, mrcpp::CompFunction<3> &K_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_K_tree,  std::vector<mrcpp::CompFunction<3>> &Psi_2c_bra){
+ComplexDouble compute_Term3_T_ZORA_MEL(MultiResolutionAnalysis<3> &MRA, std::vector<std::vector<mrcpp::CompFunction<3>*>> Nabla_Psi_2c, mrcpp::CompFunction<3> K_tree, std::vector<mrcpp::CompFunction<3> *> Nabla_K_tree,  std::vector<mrcpp::CompFunction<3>> Psi_2c_bra){
     // Compute the product K * (\Nabla \Psi) for top and bottom components
     std::vector<mrcpp::CompFunction<3>*> K_Nabla_Psi_top(3, new mrcpp::CompFunction<3>(MRA));
     std::vector<mrcpp::CompFunction<3>*> K_Nabla_Psi_bottom(3, new mrcpp::CompFunction<3>(MRA));
@@ -527,26 +479,96 @@ ComplexDouble compute_Term3_T_ZORA_MEL(MultiResolutionAnalysis<3> &MRA, std::vec
     Cross_Product_Compfunct(cross_top, Nabla_K_tree, Nabla_Psi_top, MRA);
     Cross_Product_Compfunct(cross_bottom, Nabla_K_tree, Nabla_Psi_bottom, MRA);
 
-    compute_sigma_cdot_spinor(MRA,cross_top , cross_bottom , SOC_Psi_t, SOC_Psi_b);
-    
+    CompFunction<3> tmp(MRA);
 
-    // Now i do the innetr produc with the bra
+    std::function<double(const Coord<3> &x)> one = [] (const mrcpp::Coord<3> &r) -> double {
+        return 1.0;
+    };
+    project(tmp, one, building_precision);
+
+    //std::cout << "tmp norm" << tmp.getSquareNorm() << '\n';
+    ComplexDouble norm_Psi_t = dot(tmp, *cross_top[0]);
+    ComplexDouble norm_Psi_b = dot(tmp, *cross_top[1]);
+
+    //std::cout << "cross_t0_real = " << norm_Psi_t.real() << '\t';
+    //std::cout << "cross_t0_imag = " << norm_Psi_t.imag() << '\n';
+    //std::cout << "cross_t1_real = " << norm_Psi_b.real() << '\t';
+    //std::cout << "cross_t1_imag = " << norm_Psi_b.imag() << '\n';
+
+    norm_Psi_t = dot(tmp, *cross_bottom[0]);
+    norm_Psi_b = dot(tmp, *cross_bottom[1]);
     
+    //std::cout << "cross_b0_real = " << norm_Psi_t.real() << '\t';
+    //std::cout << "cross_b0_imag = " << norm_Psi_t.imag() << '\n';
+    //std::cout << "cross_b1_real = " << norm_Psi_b.real() << '\t';
+    //std::cout << "cross_b1_imag = " << norm_Psi_b.imag() << '\n';
+
+   
+  
+
+
+    compute_sigma_cdot_spinor(MRA, cross_top, cross_bottom , SOC_Psi_t, SOC_Psi_b);
+
+    norm_Psi_t = dot(tmp, SOC_Psi_t);
+    norm_Psi_b = dot(tmp, SOC_Psi_b);
+
+    //std::cout << "norm_Psi_t_real = " << norm_Psi_t.real() << '\t';
+    //std::cout << "norm_Psi_t_imag = " << norm_Psi_t.imag() << '\n';
+    //std::cout << "norm_Psi_b_real = " << norm_Psi_b.real() << '\t';
+    //std::cout << "norm_Psi_b_imag = " << norm_Psi_b.imag() << '\n';
+    
+    // Now i do the innetr produc with the bra
+    norm_Psi_t = dot(tmp, Psi_2c_bra[0]);
+    norm_Psi_b = dot(tmp, Psi_2c_bra[1]);
+
+    //std::cout << "Psi_2c (real) = " << norm_Psi_t.real() << '\t';
+    //std::cout << "Psi_2c (imag) = " << norm_Psi_t.imag() << '\n';
+    //std::cout << "Psi_2c (real) = " << norm_Psi_b.real() << '\t';
+    //std::cout << "Psi_2c (imag) = " << norm_Psi_b.imag() << '\n';
+
+
+
+
     ComplexDouble Top_contribution = dot(Psi_2c_bra[0], SOC_Psi_t);
     ComplexDouble Bottom_contribution = dot(Psi_2c_bra[1], SOC_Psi_b);
+
+    //std::cout << "Top_contribution = " << Top_contribution << '\n';
+    //std::cout << "Bottom_contribution = " << Bottom_contribution << '\n';
+    
+    for (int i=0; i<3; i++){
+        K_Nabla_Psi_top[i]->free(); // Clear the previous values
+        //delete K_Nabla_Psi_top[i];  // Delete the object
+        
+        K_Nabla_Psi_bottom[i]->free(); // Clear the previous values
+        //delete K_Nabla_Psi_bottom[i];  // Delete the object
+        
+        cross_top[i]->free(); // Clear the previous values
+        //delete cross_top[i];  // Delete the object
+
+        cross_bottom[i]->free(); // Clear the previous values
+        //delete cross_bottom[i];  // Delete the object
+    }
+    K_Nabla_Psi_bottom.clear(); // Clear the outer container
+    K_Nabla_Psi_top.clear(); // Clear the outer container
+    cross_top.clear(); // Clear the outer container
+    cross_bottom.clear(); // Clear the outer container
+    
 
     return ComplexDouble(0,1)*(Top_contribution + Bottom_contribution);
 }
 
 
 ComplexDouble F_matrix_element(int row, int col,MultiResolutionAnalysis<3> &MRA, Spinor_gradients_pointer_list &Nabla_Psi_List, mrcpp::CompFunction<3> &Kappa_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_Kappa_tree,  Orbital_Pointer_List Psi_List, CompFunction<3> &V,  std::vector<mrcpp::CompFunction<3>> J_List_T, std::vector<mrcpp::CompFunction<3>> J_List_B, std::vector<mrcpp::CompFunction<3>> K_List_T, std::vector<mrcpp::CompFunction<3>> K_List_B, bool Energy_Orbital){
-    
+    //verbose = true;
     if (verbose){std::cout << '\t' << "Computing Kinetic Term 1..." << '\n';}
     ComplexDouble Term1 = compute_Term1_T_ZORA_MEL(MRA, Nabla_Psi_List[row], Kappa_tree,  (*Psi_List[col]));
+    //print_memory_usage();
     if (verbose){std::cout << '\t' << "Computing Kinetic Term 2..." << '\n';}
     ComplexDouble Term2 = compute_Term2_T_ZORA_MEL(MRA, Nabla_Psi_List[row], Kappa_tree, Nabla_Kappa_tree, (*Psi_List[col]));
+    //print_memory_usage();
     if (verbose){std::cout << '\t' << "Computing Kinetic Term 3..." << '\n';}
     ComplexDouble Term3 = compute_Term3_T_ZORA_MEL(MRA, Nabla_Psi_List[row], Kappa_tree, Nabla_Kappa_tree, (*Psi_List[col]));
+    //print_memory_usage();
     if (verbose){std::cout << '\t' << "Kinetic Terms computed!" << '\n';}
     // Now we do <Psi | V | Psi>
     mrcpp::CompFunction<3> psi_top__V(MRA);
@@ -560,6 +582,7 @@ ComplexDouble F_matrix_element(int row, int col,MultiResolutionAnalysis<3> &MRA,
     mrcpp::multiply(psi_top__V, V, (*Psi_List[row])[0],building_precision, false, false, false);
     mrcpp::multiply(psi_bottom__V, V, (*Psi_List[row])[1],building_precision, false, false, false);
 
+    //print_memory_usage();
     if (verbose){std::cout << '\t' << "Computing Potential Term..." << '\n' <<'\n';}
 
     ComplexDouble monoel_pot_energy = dot((*Psi_List[col])[0],psi_top__V) + dot((*Psi_List[col])[1],psi_bottom__V);
@@ -575,7 +598,7 @@ ComplexDouble F_matrix_element(int row, int col,MultiResolutionAnalysis<3> &MRA,
 
     double real_Z = double(Z);
     ComplexDouble Fock_ij =  kinetic_energy + monoel_pot_energy + biel_energy;
-    
+    //print_memory_usage();
     if (Energy_Orbital){
         std::cout << "Element [" << row << "][" << col << "] of the Fock matrix:" << '\n'; 
         std::cout << "Kinetic energy = " << kinetic_energy.real() << '\n';
@@ -592,13 +615,19 @@ ComplexDouble F_matrix_element(int row, int col,MultiResolutionAnalysis<3> &MRA,
         return Fock_ij - 0.5*biel_energy;
         
     }else{
+        //std::cout << "===========================================================" << '\n';
+        //std::cout << "  T_1[" << row << "][" << col << "] = " << kin_prefactor*Term1 << '\n';
+        //std::cout << "  T_2[" << row << "][" << col << "] = " << kin_prefactor*Term2 << '\n';
+        //std::cout << "  T_3[" << row << "][" << col << "] = " << kin_prefactor*Term3 << '\n';
+        //std::cout << "  T_t[" << row << "][" << col << "] = " << kinetic_energy << '\n';
+        //std::cout << "===========================================================" << '\n' << '\n';
         return Fock_ij;
     }
 
 }
 
 
-void Update_Fock(std::vector<double> &En, std::vector<std::vector<std::complex<double>>> &F_matrix, MultiResolutionAnalysis<3> &MRA, Spinor_gradients_pointer_list &Nabla_Psi_List, mrcpp::CompFunction<3> &Kappa_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_Kappa_tree, Orbital_Pointer_List &Psi_List, CompFunction<3> &V, std::vector<mrcpp::CompFunction<3>> J_List_T, std::vector<mrcpp::CompFunction<3>> J_List_B, std::vector<mrcpp::CompFunction<3>> K_List_T, std::vector<mrcpp::CompFunction<3>> K_List_B){
+void Update_Fock(std::vector<double> &En, std::vector<std::vector<std::complex<double>>> &F_matrix, MultiResolutionAnalysis<3> &MRA, Spinor_gradients_pointer_list &Nabla_Psi_List, mrcpp::CompFunction<3> &Kappa_tree, std::vector<mrcpp::CompFunction<3> *> &Nabla_Kappa_tree, Orbital_Pointer_List Psi_List, CompFunction<3> &V, std::vector<mrcpp::CompFunction<3>> J_List_T, std::vector<mrcpp::CompFunction<3>> J_List_B, std::vector<mrcpp::CompFunction<3>> K_List_T, std::vector<mrcpp::CompFunction<3>> K_List_B){
     // This function will update the Fock matrix with the new values of the orbitals
     if (verbose){std::cout << "Updating Fock matrix..." << '\n';}
     ComplexDouble tmp_ComplexEnergy;
@@ -690,6 +719,11 @@ void Update_Kappa(CompFunction<3> &Kappa_tree, CompFunction<3> &Kappa_inverted_t
 
     //std::cout << "--------------UPDATING Nabla_K_tree------------------" << '\n';
     ABGVOperator<3> D(MRA, 0.0, 0.0);
+
+    Nabla_Kappa_tree[0]->free();
+    Nabla_Kappa_tree[1]->free();
+    Nabla_Kappa_tree[2]->free();
+
     Nabla_Kappa_tree = mrcpp::gradient(D,Kappa_tree);
 
     if (debug){

@@ -52,9 +52,9 @@ void compute_He_energy(MultiResolutionAnalysis<3> &MRA, FunctionTree<3> &Phi, Fu
     double V_t = 2*V_ce + V_ee;
     double Exp_Val_F = T + V_ce + V_ee;
 
-    std::cout << "> T = " << 2*T << '\n';           // --> +2.85
-    std::cout << "> V_ce = " << 2* V_ce << '\n';    // --> -6.75
-    std::cout << "> V_ee = " << V_ee << '\n';       // --> +1.05
+    std::cout << "> T = " << 2*T << '\n';           // T expected --> +2.85
+    std::cout << "> V_ce = " << 2* V_ce << '\n';    // Vce expect --> -6.75
+    std::cout << "> V_ee = " << V_ee << '\n';       // Vee expect --> +1.05
     std::cout << "> V_t = " << V_t << '\n';    
 
 
