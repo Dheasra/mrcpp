@@ -1829,6 +1829,31 @@ ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi) {
     ComplexMatrix S_m12 = math_utils::hermitian_matrix_pow(S_tilde, -1.0 / 2.0);
     return S_m12;
 }
+/** @brief Compute Löwdin orthonormalization matrix for a 2 component orbital vector
+ *
+ * @param Phi: orbitals to orthonomalize
+ *
+ * Computes the inverse square root of the orbital overlap matrix S^(-1/2)
+ */
+ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVector &Phi_bottom) {
+    ComplexMatrix S_tilde_t = calc_overlap_matrix(Phi_top);
+    ComplexMatrix S_tilde_b = calc_overlap_matrix(Phi_bottom);
+
+    
+
+    ComplexMatrix S_tilde = S_tilde_t + S_tilde_b; // S = S_top + S_bottom
+    
+    // Complex conjugate the elements of S_tilde
+    for (int i = 0; i < S_tilde.rows(); i++) {
+        for (int j = 0; j < S_tilde.cols(); j++) {
+            S_tilde(i, j) = std::conj(S_tilde(i, j));
+        }
+    }
+
+
+    ComplexMatrix S_m12 = math_utils::hermitian_matrix_pow(S_tilde, -0.5);
+    return S_m12;
+}
 
 /** @brief Orbital transformation out_j = sum_i inp_i*U_ij
  *
