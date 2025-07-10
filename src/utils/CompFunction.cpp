@@ -33,6 +33,15 @@ template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra) 
     for (int i = 0; i < 4; i++) CompC[i] = nullptr;
 }
 
+template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra, int nComponents) {
+    defaultCompMRA<D> = &mra;
+    func_ptr = std::make_shared<TreePtr<D>>(false);
+    CompD = func_ptr->real;
+    CompC = func_ptr->cplx;
+    for (int i = 0; i < nComponents; i++) CompD[i] = nullptr;
+    for (int i = 0; i < nComponents; i++) CompC[i] = nullptr;
+}
+
 template <int D> CompFunction<D>::CompFunction() {
     func_ptr = std::make_shared<TreePtr<D>>(false);
     CompD = func_ptr->real;
