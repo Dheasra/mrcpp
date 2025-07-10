@@ -1836,12 +1836,14 @@ ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi) {
  * Computes the inverse square root of the orbital overlap matrix S^(-1/2)
  */
 ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVector &Phi_bottom) {
+    // std::cout << "tut" << std::endl;
     ComplexMatrix S_tilde_t = calc_overlap_matrix(Phi_top);
     ComplexMatrix S_tilde_b = calc_overlap_matrix(Phi_bottom);
 
     
 
     ComplexMatrix S_tilde = S_tilde_t + S_tilde_b; // S = S_top + S_bottom
+    // std::cout << "tut2" << std::endl;
     
     // Complex conjugate the elements of S_tilde
     for (int i = 0; i < S_tilde.rows(); i++) {
@@ -1849,9 +1851,11 @@ ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVec
             S_tilde(i, j) = std::conj(S_tilde(i, j));
         }
     }
+    // std::cout << "tut3" << std::endl;
 
 
     ComplexMatrix S_m12 = math_utils::hermitian_matrix_pow(S_tilde, -0.5);
+    // std::cout << "tut4" << std::endl;
     return S_m12;
 }
 
