@@ -75,8 +75,8 @@ void orthonormalize_orbitals(Orbital_Pointer_List &Psi_list, MultiResolutionAnal
         std::cout << Lowdin_matrix << '\n';
     }
 
-    CompFunctionVector Diagonal_Psi_top_components(4);
-    CompFunctionVector Diagonal_Psi_bottom_components(4);
+    CompFunctionVector Diagonal_Psi_top_components(6);
+    CompFunctionVector Diagonal_Psi_bottom_components(6);
 
     for (int i = 0; i < 6; i++) {
         // Apply the Lowdin matrix to the top and bottom components
@@ -88,6 +88,7 @@ void orthonormalize_orbitals(Orbital_Pointer_List &Psi_list, MultiResolutionAnal
             }
             std::cout << '\n';
         }
+        // std::cout << "tutut" << std::endl;
         linear_combination(Diagonal_Psi_top_components[i], Lowdin_matrix_row, Psi_top_components, building_precision);
         linear_combination(Diagonal_Psi_bottom_components[i], Lowdin_matrix_row, Psi_bottom_components, building_precision);
     }
@@ -207,7 +208,7 @@ void Update_Nabla_Psi_2c(Spinor_gradients_pointer_list &Nabla_Psi_list, Orbital_
 
 
     Nabla_Psi_list.clear(); // Clear the outer container
-    Nabla_Psi_list.resize(4, std::vector<std::vector<mrcpp::CompFunction<3> *>>(2, std::vector<mrcpp::CompFunction<3> *>(3, nullptr)));
+    Nabla_Psi_list.resize(6, std::vector<std::vector<mrcpp::CompFunction<3> *>>(2, std::vector<mrcpp::CompFunction<3> *>(3, nullptr)));
 
 
     std::vector<mrcpp::CompFunction<3> *> tmp1(3);
@@ -234,23 +235,23 @@ void K_Psi(std::vector<mrcpp::CompFunction<3>> &K_ij_T, std::vector<mrcpp::CompF
    
 
     // I'll need these because make_density_local only works with CompFunction, making them some temporary variables
-    std::vector<CompFunction<3>> Overlap_t_C(4);
-    std::vector<CompFunction<3>> Overlap_b_C(4);
+    std::vector<CompFunction<3>> Overlap_t_C(6);
+    std::vector<CompFunction<3>> Overlap_b_C(6);
 
-    std::vector<CompFunction<3>> Overlap_tot(4);
-    std::vector<CompFunction<3>> Convoluted(4);
+    std::vector<CompFunction<3>> Overlap_tot(6);
+    std::vector<CompFunction<3>> Convoluted(6);
 
-    std::vector<CompFunction<3>> K_i__j_TOP(4); // the 4 top components of K|Psi_i>
-    std::vector<CompFunction<3>> K_i__j_BOT(4); // the 4 top components of K|Psi_i>
+    std::vector<CompFunction<3>> K_i__j_TOP(6); // the 6 top components of K|Psi_i>
+    std::vector<CompFunction<3>> K_i__j_BOT(6); // the 6 top components of K|Psi_i>
 
 
     // To sum them over
-    std::vector<mrcpp::FunctionTree<3, double> *> K_i__j_TOP_RealFuncTree(4);
-    std::vector<mrcpp::FunctionTree<3, double> *> K_i__j_BOT_RealFuncTree(4);
+    std::vector<mrcpp::FunctionTree<3, double> *> K_i__j_TOP_RealFuncTree(6);
+    std::vector<mrcpp::FunctionTree<3, double> *> K_i__j_BOT_RealFuncTree(6);
 
     // Same for the comlex function
-    std::vector<mrcpp::FunctionTree<3, ComplexDouble> *> K_i__j_TOP_ComplexFuncTree(4);
-    std::vector<mrcpp::FunctionTree<3, ComplexDouble> *> K_i__j_BOT_ComplexFuncTree(4);
+    std::vector<mrcpp::FunctionTree<3, ComplexDouble> *> K_i__j_TOP_ComplexFuncTree(6);
+    std::vector<mrcpp::FunctionTree<3, ComplexDouble> *> K_i__j_BOT_ComplexFuncTree(6);
 
     
     

@@ -13,6 +13,8 @@
 #include <fstream>
 #include <iostream>
 
+
+
 void print_memory_usage() {
     std::ifstream statm("/proc/self/statm");
     long size, resident;
@@ -67,7 +69,7 @@ static std::function<double(const Coord<3> &x)> zero = [] (const mrcpp::Coord<3>
 #include "Smeared_potential.h"
 //#include "ZORA_utilities.h"
 
-
+#include "../src/utils/spinor_utils.h"
 
 
 
@@ -102,16 +104,16 @@ void SCF_Cycle_ZORA(MultiResolutionAnalysis<3> &MRA,
         }
 
         std::vector<double> Energy_eigenvalues(6, 0.0);
-        std::vector<std::vector<std::complex<double>>> F_matrix(6, std::vector<std::complex<double>>(4, std::complex<double>(0.0, 0.0)));
+        std::vector<std::vector<std::complex<double>>> F_matrix(6, std::vector<std::complex<double>>(6, std::complex<double>(0.0, 0.0)));
         std::vector<double> norm_difference_list(6, 0.0);
 
         print_memory_usage();
         std::cout << "-> Orthonormlizing Spin Orbitals" << '\n';
         orthonormalize_orbitals(Spin_orbitals, MRA);
-        print_memory_usage();
+        // print_memory_usage();
         // Initialize the variables for the SCF cycle
         std::cout << "-> Calculating the Exchange contributions" << '\n';
-        print_memory_usage();
+        // print_memory_usage();
         K_Psi(K_ij_T,K_ij_B, Spin_orbitals, MRA, P);
         std::cout << "-> Calculating the Coulomb contributions" << '\n';
         print_memory_usage();
@@ -298,7 +300,7 @@ int main(int argc, char **argv) {
         auto R = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
         double alpha = 3.25; //slater's rules
         double pref = R;
-        double normalisation = (2.0*alpha)^2.0 * (alpha/12.0)^0.5;
+        double normalisation = std::pow(2.0*alpha, 2.0) * std::pow(alpha/12.0,0.5);
         double radial = r[2] ; //first spherical harmonic P1(z)
         return normalisation * pref * std::exp(-0.5 *alpha*R);
         //return   std::exp(-0.5 *alpha*R*R);
@@ -382,9 +384,45 @@ int main(int argc, char **argv) {
         &Psi_6
     };
 
+    // std::cout<< "psi_1 = " << &Psi_1[0] << '\t' << &Psi_1[1] << std::endl;
+    // std::cout<< "psi_2 = " <<  &Psi_2[0] << '\t' << &Psi_2[1] << std::endl;
+    // std::cout<< "psi_3 = " <<  &Psi_3[0] << '\t' << &Psi_3[1] << std::endl;
+    // std::cout<< "psi_4 = " <<  &Psi_4[0] << '\t' << &Psi_4[1] << std::endl;
+    // std::cout<< "psi_5 = " <<  &Psi_5[0] << '\t' << &Psi_5[1] << std::endl;
+    // std::cout<< "psi_6 = " <<  &Psi_6[0] << '\t' << &Psi_6[1] << std::endl;
+
+    std::cout << "tut1" << '\n';
+    CompFunction<3> Psi_alt_1(mra);
+    project(Psi_alt_1, 0, Be_1s, building_precision); // Initialize the Psi_alt_1 function to zero
+    std::cout << "tutbis" << '\n';
+    // project(Psi_alt_1, 1, zero, building_precision); // Initialize the Psi_alt_1 function to zero
+    std::cout << "tut2" << '\n';
+    CompFunction<3> kramer_1(mra);
+    std::cout << "tut3" << '\n';
+    // project(kramer_1, 0, zero, building_precision); // Initialize the kramer_1 function to zero
+    std::cout << "tut4" << '\n';
+    project(kramer_1, 1, Be_1s, building_precision); // Initialize the kramer_1 function to zero
+    std::cout << "tut5" << '\n';
+    std::cout<< "psi_1 = " << &Psi_alt_1.CompC[0] << '\t' << &Psi_alt_1.CompC[1] << std::endl;
+    std::cout<< "kramer_1 = " << &kramer_1.CompC[0] << '\t' << &kramer_1.CompC[1] << std::endl;
+    ComplexDouble dotut1 = dot(Psi_alt_1, kramer_1);
+    std::cout << dotut1 << '\n';
+    std::cout << "tut6" << '\n';
+    apply_Pauli(Psi_alt_1, Psi_1[0], 1, building_precision, false); // Apply the Pauli operator to the first component of Psi_1
+    // kramer_1 = copy(Psi_1);
+    std::cout << "tut6bis" << '\n';
+    ComplexDouble dotut = dot(kramer_1, Psi_alt_1);
+    // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
+    std::cout << dotut << '\n';
+    std::cout << "tut7" << '\n';
+    
 
 
-
+    // mrcpp::CompFunction<3> Psi_tmp1(mra);
+    // mrcpp::CompFunction<3> Psi_tmp2(mra);
+    // // compute_term_A_Propagator(mra, 0.0, Psi_1, core_el_tree, Psi_tmp1, Psi_tmp2);
+    // apply_Helmholtz_ZORA(mra, 0, Spin_orbitals, Psi_tmp1, Psi_tmp2, core_el_tree, building_precision);
+    // exit(0);
     
 
 
@@ -442,7 +480,7 @@ int main(int argc, char **argv) {
 
 
     // Create a 6x6 matrix of ComplexDouble and initialize it as zero
-    std::vector<std::vector<std::complex<double>>> F_matrix(6, std::vector<std::complex<double>>(4, std::complex<double>(0.0, 0.0)));
+    std::vector<std::vector<std::complex<double>>> F_matrix(6, std::vector<std::complex<double>>(6, std::complex<double>(0.0, 0.0)));
     std::vector<double> Energy_eigenvalues(6, 0.0);
     
 
@@ -466,6 +504,8 @@ int main(int argc, char **argv) {
     std::vector<mrcpp::CompFunction<3> *> Nabla_Kappa_tree(3, new mrcpp::CompFunction<3>(mra)); // -> This is the tree that will hold the gradient of K
     
     // Gradient of K
+
+    // mra.getCoefs()
     mrcpp::ABGVOperator<3> D(mra, 0.0, 0.0); // deine the ABGV operator
    
 
@@ -745,6 +785,10 @@ int main(int argc, char **argv) {
         if (num_cycle >= max_cycle){
             std::cout << "The SCF cycle did not converge" << '\n';
             print::footer(0, timer, 2);
+            std::cout << "Cycle" << '\t' << "Energy" << '\t' << '\t' << '\t' << "Norm. Diff." << '\n';
+            for (int i = 0; i < E_values.size(); i++){
+                std::cout << cycle_values[i] << '\t' << E_values[i] << '\t' << norm_diff_values[i] << '\n';
+            }
             exit(0);
         }
         

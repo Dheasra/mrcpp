@@ -477,18 +477,26 @@ void compute_energy_atom_ZORA(MultiResolutionAnalysis<3> &MRA, Spinor_gradients_
 
 void compute_term_A_Propagator(MultiResolutionAnalysis<3> &MRA, double E_n, std::vector<mrcpp::CompFunction<3>> &Psi_in, CompFunction<3> &V,CompFunction<3> &term_A_top,CompFunction<3> &term_A_bottom){
     double const_factor = -E_n / (c*c);
+    bool debug = true;
     if (debug){
     std::cout << "--------------------------------------------------" << '\n';
     std::cout << " Input in A:" << '\n';
     std::cout << "  Psi_in[0] = " << Psi_in[0].getSquareNorm() << '\n';
     std::cout << "  Psi_in[1] = " << Psi_in[1].getSquareNorm() << '\n';
     std::cout << "  V = " << V.getSquareNorm() << '\n';
-}
+}   
+
+    // std::cout << "  term_A_top = " << term_A_top.getSquareNorm() << '\n';
+    // std::cout << "  term_A_bottom = " << term_A_bottom.getSquareNorm() << '\n';
 
     mrcpp::multiply(building_precision, term_A_top, 1.0, V, Psi_in[0]);
+    // std::cout << "tut1" << '\n';
     mrcpp::multiply(building_precision, term_A_bottom, 1.0, V, Psi_in[1]);
+    // std::cout << "tut2" << '\n';
     term_A_top.rescale(const_factor);
+    // std::cout << "tut3" << '\n';
     term_A_bottom.rescale(const_factor);
+    // std::cout << "tut4" << '\n';
 
 }
 
@@ -711,7 +719,7 @@ void apply_Helmholtz_ZORA(MultiResolutionAnalysis<3> &MRA,
 
     // Compute the term A
     if (verbose){std::cout << "Computing term A..." << '\n';}
-    compute_term_A_Propagator(MRA, E_n, Psi_in, V, term_A_top, term_A_bottom);
+    compute_term_A_Propagator(MRA, E_n, Psi_in, V, term_A_top, term_A_bottom); //couille ici
 
     // Compute the term B
     if (verbose){std::cout << "Computing term B..." << '\n';}
@@ -878,8 +886,8 @@ void apply_Helmholtz_ZORA_all_electrons(MultiResolutionAnalysis<3> &MRA,
     // It is used to apply the Helmholtz operator to the orbitals of the atom
     //Orbital_Pointer_List Psi_out_vector(4);
     Spinor_CompFunction Psi_out_i(2,MRA);
-    std::vector<CompFunction<3>> Psi_out_list_top(4);
-    std::vector<CompFunction<3>> Psi_out_list_bottom(4);
+    std::vector<CompFunction<3>> Psi_out_list_top(6);
+    std::vector<CompFunction<3>> Psi_out_list_bottom(6);
 
     Spinor_CompFunction Psi_in(2, MRA);
     CompFunction<3> difference_top(MRA);
