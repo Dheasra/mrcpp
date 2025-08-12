@@ -109,6 +109,12 @@ namespace mrcpp {
             std::cerr << "normalize_spinor: Norm is too small, cannot normalize." << std::endl;
             return;
         }
-        inp.rescale(1.0 / norm);
+        // inp.rescale(1.0 / norm);
+        for (int i = 0; i < inp.Ncomp(); i++) {
+            inp.func_ptr->data.c1[i] *= 1.0 / norm; // Normalize each component
+            // inp.CompC[i]->rescale(1.0 / norm); //WARNING: No copy might create some issues down the line
+            // inp.CompC[i]->func_ptr->data.c1[i] *= 1.0 / norm; // Normalize each component
+            // std::cout << "normalize_spinor: Component " << i << " normalized." << std::endl;
+        }
     }
 }

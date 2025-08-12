@@ -394,6 +394,7 @@ int main(int argc, char **argv) {
     std::cout << "tut1" << '\n';
     CompFunction<3> Psi_alt_1(mra, 2);
     project(Psi_alt_1, 0, Be_1s, building_precision); // Initialize the Psi_alt_1 function to zero
+    normalize_spinor(PSi_alt_1, building_precision); // Normalize the Psi_alt_1 function
     std::cout << "tutbis" << '\n';
     // project(Psi_alt_1, 1, zero, building_precision); // Initialize the Psi_alt_1 function to zero
     std::cout << "tut2" << '\n';

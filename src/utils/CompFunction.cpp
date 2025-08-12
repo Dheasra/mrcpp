@@ -760,17 +760,55 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
         if (bra.func_ptr->data.n1[0] != ket.func_ptr->data.n1[0] and bra.func_ptr->data.n1[0] != 0 and ket.func_ptr->data.n1[0] != 0) continue;
         std::cout << "CompFunction dot: tut " << comp << std::endl;
         if (bra.isreal() and ket.isreal()) {
-            std::cout << "CompFunction dot: both real" << std::endl;
-            dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
+            // std::cout << "CompFunction dot: both real" << std::endl;
+            // dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
+            //Computing the dot product of the current components
+            ComplexDouble dotprodtmp = 0.0;
+            dotprodtmp += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
+            //Including the c1 coefficients in the dot product
+            dotprodtmp *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
+            //Adding the result to the total dot product
+            dotprod += dotprodtmp;
+            // std::cout << "CompFunction dot: bra real" << &bra.CompD[comp] << &ket.CompD[comp] << std::endl;
         } else if (bra.isreal() and ket.iscomplex()) {
-            std::cout << "CompFunction dot: bra real" << std::endl;
-            dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompC[comp]);
+            // std::cout << "CompFunction dot: bra real" << std::endl;
+            // dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompC[comp]);
+                        // std::cout << "CompFunction dot: both real" << std::endl;
+            // dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
+            //Computing the dot product of the current components
+            ComplexDouble dotprodtmp = 0.0;
+            dotprodtmp += mrcpp::dot(*bra.CompD[comp], *ket.CompC[comp]);
+            //Including the c1 coefficients in the dot product
+            dotprodtmp *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
+            //Adding the result to the total dot product
+            dotprod += dotprodtmp;
+            // std::cout << "CompFunction dot: bra real" << &bra.CompD[comp] << &ket.CompD[comp] << std::endl;
         } else if (bra.iscomplex() and ket.isreal()) {
-            std::cout << "CompFunction dot: bra complex" << &bra.CompC[comp] << &ket.CompC[comp] << std::endl;
-            dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompD[comp]);
+            // std::cout << "CompFunction dot: bra complex" << &bra.CompC[comp] << &ket.CompC[comp] << std::endl;
+            // dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompD[comp]);
+                        // std::cout << "CompFunction dot: both real" << std::endl;
+            // dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
+            //Computing the dot product of the current components
+            ComplexDouble dotprodtmp = 0.0;
+            dotprodtmp += mrcpp::dot(*bra.CompC[comp], *ket.CompD[comp]);
+            //Including the c1 coefficients in the dot product
+            dotprodtmp *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
+            //Adding the result to the total dot product
+            dotprod += dotprodtmp;
+            // std::cout << "CompFunction dot: bra real" << &bra.CompD[comp] << &ket.CompD[comp] << std::endl;
         } else {
-            std::cout << "CompFunction dot: both complex" << std::endl;
-            dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompC[comp]);
+            // std::cout << "CompFunction dot: both complex" << std::endl;
+            // dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompC[comp]);
+                        // std::cout << "CompFunction dot: both real" << std::endl;
+            // dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
+            //Computing the dot product of the current components
+            ComplexDouble dotprodtmp = 0.0;
+            dotprodtmp += mrcpp::dot(*bra.CompC[comp], *ket.CompC[comp]);
+            //Including the c1 coefficients in the dot product
+            dotprodtmp *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
+            //Adding the result to the total dot product
+            dotprod += dotprodtmp;
+            // std::cout << "CompFunction dot: bra real" << &bra.CompD[comp] << &ket.CompD[comp] << std::endl;
         }
         std::cout << "CompFunction dot: out " << comp << std::endl;
         dotprod *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
