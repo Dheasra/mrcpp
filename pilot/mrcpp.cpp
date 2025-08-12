@@ -392,12 +392,12 @@ int main(int argc, char **argv) {
     // std::cout<< "psi_6 = " <<  &Psi_6[0] << '\t' << &Psi_6[1] << std::endl;
 
     std::cout << "tut1" << '\n';
-    CompFunction<3> Psi_alt_1(mra);
+    CompFunction<3> Psi_alt_1(mra, 2);
     project(Psi_alt_1, 0, Be_1s, building_precision); // Initialize the Psi_alt_1 function to zero
     std::cout << "tutbis" << '\n';
     // project(Psi_alt_1, 1, zero, building_precision); // Initialize the Psi_alt_1 function to zero
     std::cout << "tut2" << '\n';
-    CompFunction<3> kramer_1(mra);
+    CompFunction<3> kramer_1(mra, 2);
     std::cout << "tut3" << '\n';
     // project(kramer_1, 0, zero, building_precision); // Initialize the kramer_1 function to zero
     std::cout << "tut4" << '\n';
@@ -408,10 +408,12 @@ int main(int argc, char **argv) {
     ComplexDouble dotut1 = dot(Psi_alt_1, kramer_1);
     std::cout << dotut1 << '\n';
     std::cout << "tut6" << '\n';
-    apply_Pauli(Psi_alt_1, Psi_1[0], 1, building_precision, false); // Apply the Pauli operator to the first component of Psi_1
+    CompFunction<3> Psi_alt_2(mra,2);
+    project(Psi_alt_2, 0, Be_1s, building_precision);
+    apply_Pauli(Psi_alt_2, Psi_alt_1, 1, building_precision, false); // Apply the Pauli operator to the first component of Psi_1
     // kramer_1 = copy(Psi_1);
     std::cout << "tut6bis" << '\n';
-    ComplexDouble dotut = dot(kramer_1, Psi_alt_1);
+    ComplexDouble dotut = dot(kramer_1, Psi_alt_2);
     // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
     std::cout << dotut << '\n';
     std::cout << "tut7" << '\n';

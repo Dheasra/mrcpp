@@ -39,9 +39,9 @@ template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra, 
     CompD = func_ptr->real;
     CompC = func_ptr->cplx;
     func_ptr->data.Ncomp = nComponents;
-    for (int i = 0; i < nComponents; i++) CompD[i] = nullptr;
-    for (int i = 0; i < nComponents; i++) CompC[i] = nullptr;
-    std::cout << &CompC[1] << std::endl; // Debugging line to check the address of CompC
+    for (int i = 0; i < 4; i++) CompD[i] = nullptr;
+    for (int i = 0; i < 4; i++) CompC[i] = nullptr;
+    std::cout << "tutCompF" << func_ptr->data.Ncomp << std::endl; // Debugging line to check the address of CompC
     // std::cout << "initializing CompFunction " << CompC.size()<< std::endl; 
     // CompFunction tut(mra);
 }
@@ -753,7 +753,7 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDoub
 template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunction<D> &ket) {
     if (bra.func_ptr->conj or ket.func_ptr->conj) MSG_ABORT("Not implemented");
     ComplexDouble dotprodtot = 0.0;
-    std::cout << "CompFunction dot: bra " << &bra << " ket " << &ket << std::endl;
+    std::cout << "CompFunction dot: bra " << bra.Ncomp() << " ket " << bra.Ncomp() << std::endl;
     for (int comp = 0; comp < bra.Ncomp(); comp++) {
         std::cout << "CompFunction dot: comp " << comp << std::endl;
         ComplexDouble dotprod = 0.0;
@@ -830,14 +830,16 @@ void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r
 // template <int D, typename T>
 void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec) {
     bool need_to_project = not(out.isShared()) or mpi::share_master();
-    // std::cout << "project " << need_to_project << " " << &out<< std::endl;
+    std::cout << "project " << need_to_project << " " << &out<< std::endl;
     out.func_ptr->isreal = 0;
     out.func_ptr->iscomplex = 1;
-    // if (out.Ncomp() < compIndex) out.alloc(compIndex +1);
-    for (int i = out.Ncomp(); i <= compIndex; i++) {
+
+    if (out.Ncomp() <= compIndex) std::cerr << "CompFunction::project:  Trying to project onto a component that is not defined for the spinor" << std::endl;
+
+    for (int i = 0; i < out.Ncomp(); i++) {
         out.alloc_comp(i);
     }
-    // std::cout << "ptut1 " << compIndex << " "<< need_to_project << std::endl;
+    std::cout << "ptut1 " << compIndex << " "<< need_to_project << std::endl;
     // std::cout << &out.CompC[0] << std::endl; // Debugging line to check the address of CompC
     // std::cout << &out.CompC[1] << std::endl; // Debugging line to check the address of CompC
     // if (need_to_project) mrcpp::project<3>(prec, *out.CompC[compIndex], f);
@@ -851,7 +853,7 @@ void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(co
             mrcpp::project<3>(prec, *out.CompC[i], fzero);
         }
     };
-    // std::cout << "ptut2" << std::endl;
+    std::cout << "ptut2" << std::endl;
     // ComplexDouble outut = dot(out, out);
     // std::cout << "ptut3 " << outut << std::endl;
     mpi::share_function(out, 0, 123123, mpi::comm_share); //The 0 is the rank of the master process, 123123 is a tag for the message
