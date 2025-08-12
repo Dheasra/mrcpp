@@ -7,6 +7,10 @@ using namespace Eigen;
 
 namespace mrcpp {
 
+
+// ---- Structure to hold the data of the CompFunction ----
+// This structure holds the data of the CompFunction, such as the number of components, rank, conjugate, etc.
+// It is used to define the properties of the multicomponent function.
 template <int D> struct CompFunctionData {
     // additional data that describe the overall multicomponent function (defined by user):
     // occupancy, quantum number, norm, etc.
@@ -45,6 +49,8 @@ template <int D> struct CompFunctionData {
     int Nchunks[4]{0, 0, 0, 0}; // number of chunks of each component tree
 };
 
+
+// --- Class to hold the pointer to the tree and the data of the CompFunction ---
 template <int D> class TreePtr final {
 public:
     explicit TreePtr(bool share)
@@ -91,9 +97,13 @@ protected:
     SharedMemory<ComplexDouble> *shared_mem_cplx;
 };
 
+// --- Class to hold the CompFunction ---
+// This class is a multicomponent function that can hold multiple components, each represented by a FunctionTree.
+// It is used to represent spinors in a general way, or other multicomponent functions.
 template <int D> class CompFunction {
 public:
     CompFunction(MultiResolutionAnalysis<D> &mra);
+    CompFunction(MultiResolutionAnalysis<D> &mra, int nComponents);
     CompFunction();
     CompFunction(int n1);
     CompFunction(int n1, bool share);
@@ -170,20 +180,30 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> &inp_a, Rep
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> &inp_a, RepresentableFunction<D, ComplexDouble> &f, double prec, int nrefine = 0, bool conjugate = false);
 template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, double> &inp_a, RepresentableFunction<D, double> &f, double prec, int nrefine = 0, bool conjugate = false);
 template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDouble> &inp_a, RepresentableFunction<D, ComplexDouble> &f, double prec, int nrefine = 0, bool conjugate = false);
-template <int D> ComplexDouble dot(CompFunction<D> bra, CompFunction<D> ket);
+template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunction<D> &ket);
+// template <int D> ComplexDouble dot(CompFunction<D> &bra, CompFunction<D> &ket);
 template <int D> double node_norm_dot(CompFunction<D> bra, CompFunction<D> ket);
 void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec);
 void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec);
+void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec);
+// ComplexDouble fzero(const Coord<3> &r);
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec);
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec);
 template <int D> void orthogonalize(double prec, CompFunction<D> &Bra, CompFunction<D> &Ket);
 
+
+// --- Class to hold a vector of CompFunction ---
+// This class can be used to represent a collection of CompFunction objects, for instance the set of spinors representing the orbitals of an atom/molecule.
 class CompFunctionVector : public std::vector<CompFunction<3>> {
 public:
     CompFunctionVector(int N = 0);
     MultiResolutionAnalysis<3> *vecMRA;
     void distribute();
+
+    // CompFunction<3> operator[](int i) const;
 };
+
+// void project(CompFunctionVector &out, std::function<double(const Coord<3> &r)> f, int index, double prec);
 
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec = -1.0);
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec = -1.0);
