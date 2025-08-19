@@ -394,7 +394,10 @@ int main(int argc, char **argv) {
     std::cout << "tut1" << '\n';
     CompFunction<3> Psi_alt_1(mra, 2);
     project(Psi_alt_1, 0, Be_1s, building_precision); // Initialize the Psi_alt_1 function to zero
-    normalize_spinor(PSi_alt_1, building_precision); // Normalize the Psi_alt_1 function
+    normalize_spinor(Psi_alt_1, building_precision); // Normalize the Psi_alt_1 function
+    ComplexDouble dotest = dot(Psi_alt_1, Psi_alt_1);
+    // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
+    std::cout << dotest << '\n';
     std::cout << "tutbis" << '\n';
     // project(Psi_alt_1, 1, zero, building_precision); // Initialize the Psi_alt_1 function to zero
     std::cout << "tut2" << '\n';
@@ -403,6 +406,10 @@ int main(int argc, char **argv) {
     // project(kramer_1, 0, zero, building_precision); // Initialize the kramer_1 function to zero
     std::cout << "tut4" << '\n';
     project(kramer_1, 1, Be_1s, building_precision); // Initialize the kramer_1 function to zero
+    normalize_spinor(kramer_1, building_precision); // Normalize the Psi_alt_1 function
+    ComplexDouble dotesta = dot(kramer_1, kramer_1);
+    // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
+    std::cout << dotesta << '\n';
     std::cout << "tut5" << '\n';
     std::cout<< "psi_1 = " << &Psi_alt_1.CompC[0] << '\t' << &Psi_alt_1.CompC[1] << std::endl;
     std::cout<< "kramer_1 = " << &kramer_1.CompC[0] << '\t' << &kramer_1.CompC[1] << std::endl;
@@ -410,9 +417,13 @@ int main(int argc, char **argv) {
     std::cout << dotut1 << '\n';
     std::cout << "tut6" << '\n';
     CompFunction<3> Psi_alt_2(mra,2);
-    project(Psi_alt_2, 0, Be_1s, building_precision);
+    // project(Psi_alt_2, 0, zero, building_precision);
+    // normalize_spinor(Psi_alt_2, building_precision);
     apply_Pauli(Psi_alt_2, Psi_alt_1, 1, building_precision, false); // Apply the Pauli operator to the first component of Psi_1
     // kramer_1 = copy(Psi_1);
+    ComplexDouble dotestb = dot(Psi_alt_2, Psi_alt_2);
+    std::cout << dotestb << '\n';
+
     std::cout << "tut6bis" << '\n';
     ComplexDouble dotut = dot(kramer_1, Psi_alt_2);
     // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
