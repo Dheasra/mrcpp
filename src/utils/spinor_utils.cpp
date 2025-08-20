@@ -36,33 +36,33 @@ namespace mrcpp {
             break;
         case 1:
             // Apply Pauli-Y matrix
-            std::cout << "apply Pauli Y tut0 " << out.Ncomp() << " " << inp.Ncomp() << '\n';
+            // std::cout << "apply Pauli Y tut0 " << out.Ncomp() << " " << inp.Ncomp() << '\n';
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
                 // ComplexDouble dotut0 = dot(out, out);
-                std::cout << "Applying Pauli-Y matrix " << i << std::endl;
+                // std::cout << "Applying Pauli-Y matrix " << i << std::endl;
                 // out.CompC[i] = inp.CompC[i+1]; //WARNING: No copy might create some issues down the line
                 out.setCplx(inp.CompC[i+1], i); //WARNING: No copy might create some issues down the line
-                std::cout << "apply Pauli Y tut1" << '\n'; 
+                // std::cout << "apply Pauli Y tut1" << '\n'; 
                 // out.CompC[i]->rescale(-1.0i); //Là j'utilise le rescale des functiontree, pas celui de CompFunction TODO: créer un rescale qui ne change que un seul terme
                 out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i+1] * (-1.0)*comp_i;
                 // out.func_ptr->data.c1[i] *= comp_i;
-                std::cout << "apply Pauli Y tut2" << '\n';
+                // std::cout << "apply Pauli Y tut2" << '\n';
                 // out.CompC[i+1] = inp.CompC[i];
                 out.setCplx(inp.CompC[i], i+1); //WARNING: No copy might create some issues down the line
-                std::cout << "apply Pauli Y tut3" << '\n';
+                // std::cout << "apply Pauli Y tut3" << '\n';
                 // out.CompC[i+1]->rescale(1.0i);
                 out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i] * comp_i;
                 // out.func_ptr->data.c1[i+1] *= -1.0*comp_i;
-                std::cout << "apply Pauli Y tut4 pouet" << '\n';
+                // std::cout << "apply Pauli Y tut4 pouet" << '\n';
 
                 // rescale(1.0, out.CompC[i], -1.0i, inp.CompC[i+1]); //WARNING: No copy might create some issues down the line
                 // out.CompC[i+1]->multiply(1.0i, inp.CompC[i]);
                 ComplexDouble dotuta = dot(inp, inp);
-                std::cout << "apply Pauli Y tut5" << dotuta << '\n';
+                // std::cout << "apply Pauli Y tut5" << dotuta << '\n';
                 ComplexDouble dotutb = dot(out, out);
-                std::cout << "apply Pauli Y tut6" << dotutb << '\n';
+                // std::cout << "apply Pauli Y tut6" << dotutb << '\n';
                 ComplexDouble dotutc = dot(out, inp);
-                std::cout << "apply Pauli Y tut7" << dotutc << '\n';
+                // std::cout << "apply Pauli Y tut7" << dotutc << '\n';
             }
             break;
         case 2:

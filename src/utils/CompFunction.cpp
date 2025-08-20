@@ -41,7 +41,7 @@ template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra, 
     func_ptr->data.Ncomp = nComponents;
     for (int i = 0; i < 4; i++) CompD[i] = nullptr;
     for (int i = 0; i < 4; i++) CompC[i] = nullptr;
-    std::cout << "tutCompF" << func_ptr->data.Ncomp << std::endl; // Debugging line to check the address of CompC
+    // std::cout << "tutCompF" << func_ptr->data.Ncomp << std::endl; // Debugging line to check the address of CompC
     // std::cout << "initializing CompFunction " << CompC.size()<< std::endl; 
     // CompFunction tut(mra);
 }
@@ -412,20 +412,20 @@ template <int D> int CompFunction<D>::crop(double prec) {
 
 /** @brief In place multiply with scalar. Fully in-place.*/
 template <int D> void CompFunction<D>::rescale(ComplexDouble c) {
-    std::cout << "CompFunction rescale: tut " << std::endl;
+    // std::cout << "CompFunction rescale: tut " << std::endl;
     bool need_to_rescale = not(isShared()) or mpi::share_master();
     if (need_to_rescale) {
         for (int i = 0; i < Ncomp(); i++) {
-            std::cout << "CompFunction rescale: init " << i << std::endl;
+            // std::cout << "CompFunction rescale: init " << i << std::endl;
             if (iscomplex()) {
-                std::cout << "CompFunction rescale: complex" << std::endl;
+                // std::cout << "CompFunction rescale: complex" << std::endl;
                 CompC[i]->rescale(c);
             } else {
                 if (abs(c.imag()) > MachineZero) { // works only only for NComp==1)
                     CompD[i]->CopyTreeToComplex(CompC[i]);
                     delete CompD[i];
                     CompD[i] = nullptr;
-                    std::cout << "CompFunction rescale: converting to complex" << std::endl;
+                    // std::cout << "CompFunction rescale: converting to complex" << std::endl;
                     func_ptr->iscomplex = true;
                     func_ptr->isreal = false;
                     CompC[i]->rescale(c);
@@ -753,12 +753,12 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDoub
 template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunction<D> &ket) {
     if (bra.func_ptr->conj or ket.func_ptr->conj) MSG_ABORT("Not implemented");
     ComplexDouble dotprodtot = 0.0;
-    std::cout << "CompFunction dot: bra " << bra.Ncomp() << " ket " << bra.Ncomp() << std::endl;
+    // std::cout << "CompFunction dot: bra " << bra.Ncomp() << " ket " << bra.Ncomp() << std::endl;
     for (int comp = 0; comp < bra.Ncomp(); comp++) {
-        std::cout << "CompFunction dot: comp " << comp << std::endl;
+        // std::cout << "CompFunction dot: comp " << comp << std::endl;
         ComplexDouble dotprod = 0.0;
         if (bra.func_ptr->data.n1[0] != ket.func_ptr->data.n1[0] and bra.func_ptr->data.n1[0] != 0 and ket.func_ptr->data.n1[0] != 0) continue;
-        std::cout << "CompFunction dot: tut " << comp << std::endl;
+        // std::cout << "CompFunction dot: tut " << comp << std::endl;
         // ComplexDouble dotprodtmp = 0.0;
         if (bra.isreal() and ket.isreal()) {
             // std::cout << "CompFunction dot: both real" << std::endl;
@@ -812,11 +812,11 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
         dotprod *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
         //Adding the result to the total dot product
         // dotprod += dotprodtmp;
-        std::cout << "CompFunction dot: out " << comp << std::endl;
+        // std::cout << "CompFunction dot: out " << comp << std::endl;
     //     dotprod *= std::conj(bra.func_ptr->data.c1[comp]) * ket.func_ptr->data.c1[comp];
         dotprodtot += dotprod;
     }
-    std::cout << "CompFunction dot: end " << std::endl;
+    // std::cout << "CompFunction dot: end " << std::endl;
     return dotprodtot;
 }
 
@@ -870,7 +870,7 @@ void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r
 // template <int D, typename T>
 void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec) {
     bool need_to_project = not(out.isShared()) or mpi::share_master();
-    std::cout << "project " << need_to_project << " " << &out<< std::endl;
+    // std::cout << "project " << need_to_project << " " << &out<< std::endl;
     out.func_ptr->isreal = 0;
     out.func_ptr->iscomplex = 1;
 
@@ -879,7 +879,7 @@ void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(co
     for (int i = 0; i < out.Ncomp(); i++) {
         out.alloc_comp(i);
     }
-    std::cout << "ptut1 " << compIndex << " "<< need_to_project << std::endl;
+    // std::cout << "ptut1 " << compIndex << " "<< need_to_project << std::endl;
     // std::cout << &out.CompC[0] << std::endl; // Debugging line to check the address of CompC
     // std::cout << &out.CompC[1] << std::endl; // Debugging line to check the address of CompC
     // if (need_to_project) mrcpp::project<3>(prec, *out.CompC[compIndex], f);
@@ -893,7 +893,7 @@ void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(co
             mrcpp::project<3>(prec, *out.CompC[i], fzero);
         }
     };
-    std::cout << "ptut2" << std::endl;
+    // std::cout << "ptut2" << std::endl;
     // ComplexDouble outut = dot(out, out);
     // std::cout << "ptut3 " << outut << std::endl;
     mpi::share_function(out, 0, 123123, mpi::comm_share); //The 0 is the rank of the master process, 123123 is a tag for the message
