@@ -56,6 +56,7 @@ template <int D> CompFunction<D>::CompFunction() {
 
 /*
  * Empty functions (no components defined)
+ * @param n1: 
  */
 template <int D> CompFunction<D>::CompFunction(int n1) {
     func_ptr = std::make_shared<TreePtr<D>>(false);
@@ -70,6 +71,53 @@ template <int D> CompFunction<D>::CompFunction(int n1) {
     func_ptr->isreal = 1;
     func_ptr->iscomplex = 0;
     func_ptr->data.shared = false;
+    // func_ptr->data.Ncomp = nComponents;
+}
+
+/*
+ * Empty functions (no components defined)
+ * Not universal like the other constructors, but specific to set up spinors
+ * @param spin: "Paired", "Alpha", "Beta"
+ * @param nComponents: number of components (1 for scalar, 2 for spinor, 4 for Dirac spinor)
+ * @param spin_type: "Large", "Small"
+ */
+template <int D> CompFunction<D>::CompFunction(std::string spin, int nComponents, std::string spin_type) {
+    // --- Setting up the pointers to the trees
+    func_ptr = std::make_shared<TreePtr<D>>(false);
+    CompD = func_ptr->real;
+    CompC = func_ptr->cplx;
+    for (int i = 0; i < 4; i++) CompD[i] = nullptr;
+    for (int i = 0; i < 4; i++) CompC[i] = nullptr;
+
+    // --- Setting up spin
+    // first determine if large or small component
+    int spin_index = 0;
+    if (spin_type == "Large" || spin_type == "large" || spin_type == "L" || spin_type == "l") { // Default, Keeping this here (even though it's redundant) just to make the code more readable
+        spin_index = 0;
+    }
+    else if (spin_type == "Small" || spin_type == "small" || spin_type == "S" || spin_type == "s") {
+        spin_index = 2;
+    }
+    else {
+        MSG_ERROR( "CompFunction: unknown component type ");
+    }
+    if (spin == "Paired" || spin == "paired" || spin == "P" || spin == "p")
+        func_ptr->data.n1[spin_index] = 2;
+    else if (spin == "Alpha" || spin == "alpha" || spin == "A" || spin == "a")
+        func_ptr->data.n1[spin_index] = 1;
+    else if (spin == "Beta" || spin == "beta" || spin == "B" || spin == "b")
+        func_ptr->data.n1[spin_index + 1] = 1;
+    else {
+        MSG_ERROR( "CompFunction: unknown spin type ");
+    }
+    // func_ptr->data.n1[0] = n1;
+    // func_ptr->data.n2[0] = -1;
+    // func_ptr->data.n3[0] = 0;
+    func_ptr->rank = 0;
+    func_ptr->isreal = 1;
+    func_ptr->iscomplex = 0;
+    func_ptr->data.shared = false;
+    func_ptr->data.Ncomp = nComponents;
 }
 
 /*

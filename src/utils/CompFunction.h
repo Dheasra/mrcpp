@@ -25,7 +25,7 @@ template <int D> struct CompFunctionData {
     double CompFd2{0.0};
     double CompFd3{0.0};
     // additional data that describe each component (defined by user):
-    // occupancy, quantum number, norm, etc.
+    // occupancy, quantum number, spin, etc.
     // Note: defined with fixed size to ease copying and MPI send
     int n1[4]{0, 0, 0, 0}; // 0: neutral. otherwise different values are orthogonal to each other (product = 0)
     int n2[4]{0, 0, 0, 0};
@@ -106,6 +106,7 @@ public:
     CompFunction(MultiResolutionAnalysis<D> &mra, int nComponents);
     CompFunction();
     CompFunction(int n1);
+    CompFunction(std::string spin, int nComponents = 1, std::string spin_type="Large"); 
     CompFunction(int n1, bool share);
     CompFunction(const CompFunctionData<D> &indata, bool alloc = false);
     CompFunction(const CompFunction<D> &compfunc);
