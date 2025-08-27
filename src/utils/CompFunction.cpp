@@ -2003,7 +2003,7 @@ ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi) {
  *
  * @param Phi: orbitals to orthonomalize
  *
- * Computes the inverse square root of the orbital overlap matrix S^(-1/2)
+ * Computes the inverse square root of the orbital overlap matrix S^(-1/2)sk
  */
 ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVector &Phi_bottom) {
     // std::cout << "tut" << std::endl;

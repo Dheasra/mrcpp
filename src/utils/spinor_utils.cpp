@@ -125,3 +125,59 @@ namespace mrcpp {
         }
     }
 }
+
+// @brief Disjoining (filetering out) scalar paired orbitals in the vector of spinors Phi
+// The elements of Phi that have n1[spin]==1 are moved to the output vector, while the others remain in Phi, with ownership transferred as needed.
+// @param Phi: vector of spinors to be disjoined
+// @param spin: index of the spin component to filter by (0 for alpha, 1 for beta) (For scalar and 2C calculations). For 4C spinors, we also have 2 is alpha small component and 3 is beta small component. 
+CompFunctionVector disjoin(CompFunctionVector &Phi, int spin) {
+    CompFunctionVector out;
+    CompFunctionVector tmp;
+    for (auto &i : Phi) {
+        if (i.data.n1[spin]() == 1) { //checking if the element's spin is the desired one and transferring it to out (with ownership)
+            if (i.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) { 
+                // need to send orbital from owner to new owner
+                if (mrcpp::mpi::my_orb(i)) { mrcpp::mpi::send_function(i, out.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+                if (mrcpp::mpi::my_orb(out.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+            }
+            i.setRank(out.size());
+            out.push_back(i);
+        } else { //otherwise transferring it to tmp, also with ownership.
+            if (i.getRank() % mrcpp::mpi::wrk_size != tmp.size() % mrcpp::mpi::wrk_size) {
+                // need to send orbital from owner to new owner
+                if (mrcpp::mpi::my_orb(i)) { mrcpp::mpi::send_function(i, tmp.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+                if (mrcpp::mpi::my_orb(tmp.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+            }
+            i.setRank(tmp.size());
+            tmp.push_back(i);
+        }
+    }
+    Phi.clear();
+    Phi = tmp;
+    return out;
+}
+
+CompFunctionVector adjoin(CompFunctionVector &Phi_a, CompFunctionVector &Phi_b) {
+    CompFunctionVector out;
+    for (auto &phi : Phi_a) {
+        if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
+            // need to send orbital from owner to new owner
+            if (mrcpp::mpi::my_orb(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+            if (mrcpp::mpi::my_orb(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+        }
+        phi.setRank(out.size());
+        out.push_back(phi);
+    }
+    for (auto &phi : Phi_b) {
+        if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
+            // need to send orbital from owner to new owner
+            if (mrcpp::mpi::my_orb(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+            if (mrcpp::mpi::my_orb(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+        }
+        phi.setRank(out.size());
+        out.push_back(phi);
+    }
+    Phi_a.clear();
+    Phi_b.clear();
+    return out;
+}
