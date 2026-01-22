@@ -1,6 +1,7 @@
 #include "spinor_utils.h"
-
-#include "CompFunction.h"
+#include "utils/CompFunction.h"
+#include "utils/mpi_utils.h"
+#include "utils/parallel.h"
 // #include "FunctionTreeVector.h"
 
 #include <complex>
@@ -8,20 +9,20 @@
 using namespace std::complex_literals;
 
 namespace mrcpp {
-    void apply_Pauli(CompFunction<3> &out, const CompFunction<3> &inp, int pauli, double prec, bool conjugate) {
+    
+    // /*
+    //  * @brief: shuffles the indices of a spinor, simulating the application of a Dirac matrix to it
+    //  * pauli represents the index of the Dirac matrices.
+    //  * For scalar operators, it is unused.
+    //  * For 2 component (Weyl/Pauli) spinors, pauli = 0,1,2,3 corresponds to indentiy, sigma_x, y and z respectively.
+    //  * 
+    // */
+    void apply_Pauli(CompFunction<3> &out, const CompFunction<3> &inp, int pauli, double prec, bool conjugate) { //NOTE: assumes 2-component spinors for now
         // Implementation of applying Pauli matrices to spinor functions
         // This function will modify 'out' based on the Pauli matrix specified by 'pauli'
         // and the input function 'inp'.
         // The 'prec' parameter is used for precision control.
         // The 'conjugate' parameter indicates whether to apply conjugation.
-        // if (inp.Ncomp() != 2 && inp.Ncomp() != 4) {
-        //     std::cerr << "apply_Pauli: Input function must have 2 or 4 components." << std::endl;
-        //     return;
-        // }
-        // if (out.Ncomp() != 2 && out.Ncomp() != 4) {
-        //     std::cerr << "apply_Pauli: Output function must have 2 or 4 components." << std::endl;
-        //     return;
-        // }
         ComplexDouble comp_i(0.0, 1.0); // Define the imaginary unit
         switch (pauli)
         {
@@ -124,60 +125,59 @@ namespace mrcpp {
             // std::cout << "normalize_spinor: Component " << i << " normalized." << std::endl;
         }
     }
-}
-
-// @brief Disjoining (filetering out) scalar paired orbitals in the vector of spinors Phi
-// The elements of Phi that have n1[spin]==1 are moved to the output vector, while the others remain in Phi, with ownership transferred as needed.
-// @param Phi: vector of spinors to be disjoined
-// @param spin: index of the spin component to filter by (0 for alpha, 1 for beta) (For scalar and 2C calculations). For 4C spinors, we also have 2 is alpha small component and 3 is beta small component. 
-CompFunctionVector disjoin(CompFunctionVector &Phi, int spin) {
-    CompFunctionVector out;
-    CompFunctionVector tmp;
-    for (auto &i : Phi) {
-        if (i.data.n1[spin]() == 1) { //checking if the element's spin is the desired one and transferring it to out (with ownership)
-            if (i.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) { 
-                // need to send orbital from owner to new owner
-                if (mrcpp::mpi::my_orb(i)) { mrcpp::mpi::send_function(i, out.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
-                if (mrcpp::mpi::my_orb(out.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+    // @brief Disjoining (filetering out) scalar paired orbitals in the vector of spinors Phi
+    // The elements of Phi that have n1[spin]==1 are moved to the output vector, while the others remain in Phi, with ownership transferred as needed.
+    // @param Phi: vector of spinors to be disjoined
+    // @param spin: index of the spin component to filter by (0 for alpha, 1 for beta) (For scalar and 2C calculations). For 4C spinors, we also have 2 is alpha small component and 3 is beta small component. 
+    CompFunctionVector disjoin(CompFunctionVector &Phi, int spin) {
+        CompFunctionVector out;
+        CompFunctionVector tmp;
+        for (auto &i : Phi) {
+            if (i.func_ptr->data.n1[spin] == 1) { //checking if the element's spin is the desired one and transferring it to out (with ownership)
+                if (i.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) { 
+                    // need to send orbital from owner to new owner
+                    if (mrcpp::mpi::my_func(i)) { mrcpp::mpi::send_function(i, out.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+                    if (mrcpp::mpi::my_func(out.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+                }
+                i.setRank(out.size());
+                out.push_back(i);
+            } else { //otherwise transferring it to tmp, also with ownership.
+                if (i.getRank() % mrcpp::mpi::wrk_size != tmp.size() % mrcpp::mpi::wrk_size) {
+                    // need to send orbital from owner to new owner
+                    if (mrcpp::mpi::my_func(i)) { mrcpp::mpi::send_function(i, tmp.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+                    if (mrcpp::mpi::my_func(tmp.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+                }
+                i.setRank(tmp.size());
+                tmp.push_back(i);
             }
-            i.setRank(out.size());
-            out.push_back(i);
-        } else { //otherwise transferring it to tmp, also with ownership.
-            if (i.getRank() % mrcpp::mpi::wrk_size != tmp.size() % mrcpp::mpi::wrk_size) {
+        }
+        Phi.clear();
+        Phi = tmp;
+        return out;
+    }
+    
+    CompFunctionVector adjoin(CompFunctionVector &Phi_a, CompFunctionVector &Phi_b) {
+        CompFunctionVector out;
+        for (auto &phi : Phi_a) {
+            if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
                 // need to send orbital from owner to new owner
-                if (mrcpp::mpi::my_orb(i)) { mrcpp::mpi::send_function(i, tmp.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
-                if (mrcpp::mpi::my_orb(tmp.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
+                if (mrcpp::mpi::my_func(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+                if (mrcpp::mpi::my_func(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
             }
-            i.setRank(tmp.size());
-            tmp.push_back(i);
+            phi.setRank(out.size());
+            out.push_back(phi);
         }
-    }
-    Phi.clear();
-    Phi = tmp;
-    return out;
-}
-
-CompFunctionVector adjoin(CompFunctionVector &Phi_a, CompFunctionVector &Phi_b) {
-    CompFunctionVector out;
-    for (auto &phi : Phi_a) {
-        if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
-            // need to send orbital from owner to new owner
-            if (mrcpp::mpi::my_orb(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
-            if (mrcpp::mpi::my_orb(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+        for (auto &phi : Phi_b) {
+            if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
+                // need to send orbital from owner to new owner
+                if (mrcpp::mpi::my_func(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+                if (mrcpp::mpi::my_func(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
+            }
+            phi.setRank(out.size());
+            out.push_back(phi);
         }
-        phi.setRank(out.size());
-        out.push_back(phi);
+        Phi_a.clear();
+        Phi_b.clear();
+        return out;
     }
-    for (auto &phi : Phi_b) {
-        if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
-            // need to send orbital from owner to new owner
-            if (mrcpp::mpi::my_orb(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
-            if (mrcpp::mpi::my_orb(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
-        }
-        phi.setRank(out.size());
-        out.push_back(phi);
-    }
-    Phi_a.clear();
-    Phi_b.clear();
-    return out;
 }

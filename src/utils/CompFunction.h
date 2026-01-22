@@ -102,12 +102,13 @@ protected:
 // It is used to represent spinors in a general way, or other multicomponent functions.
 template <int D> class CompFunction {
 public:
+//TODO: créer un projecteur qui initialise juste un composant, comme ça on encode le spin dans la structure de la classe elle-même
     CompFunction(MultiResolutionAnalysis<D> &mra);
     CompFunction(MultiResolutionAnalysis<D> &mra, int nComponents);
     CompFunction();
-    CompFunction(int n1);
-    CompFunction(std::string spin, int nComponents = 1, std::string spin_type="Large"); 
-    CompFunction(int n1, bool share);
+    CompFunction(int n1, int nComponents = 1);
+    // CompFunction(std::string spin, int nComponents = 1, std::string spin_type="Large"); 
+    CompFunction(int n1, bool share, int nComponents = 1);
     CompFunction(const CompFunctionData<D> &indata, bool alloc = false);
     CompFunction(const CompFunction<D> &compfunc);
     CompFunction(CompFunction<D> &&compfunc);
@@ -186,7 +187,7 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
 template <int D> double node_norm_dot(CompFunction<D> bra, CompFunction<D> ket);
 void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec);
 void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec);
-void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec);
+void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec, int cmplx = 1);
 // ComplexDouble fzero(const Coord<3> &r);
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec);
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec);
@@ -217,5 +218,7 @@ ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVec
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet);
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &Ket);
 void orthogonalize(double prec, CompFunctionVector &Bra, CompFunctionVector &Ket);
+
+void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec = -1.0);
 
 } // namespace mrcpp

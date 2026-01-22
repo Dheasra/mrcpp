@@ -56,9 +56,9 @@ template <int D> CompFunction<D>::CompFunction() {
 
 /*
  * Empty functions (no components defined)
- * @param n1: 
+ * @param n1: for instance spin (1=alpha, -1=beta, 2=paired) or anything else
  */
-template <int D> CompFunction<D>::CompFunction(int n1) {
+template <int D> CompFunction<D>::CompFunction(int n1, int nComponents) {
     func_ptr = std::make_shared<TreePtr<D>>(false);
     CompD = func_ptr->real;
     CompC = func_ptr->cplx;
@@ -71,7 +71,7 @@ template <int D> CompFunction<D>::CompFunction(int n1) {
     func_ptr->isreal = 1;
     func_ptr->iscomplex = 0;
     func_ptr->data.shared = false;
-    // func_ptr->data.Ncomp = nComponents;
+    func_ptr->data.Ncomp = nComponents;
 }
 
 /*
@@ -81,49 +81,49 @@ template <int D> CompFunction<D>::CompFunction(int n1) {
  * @param nComponents: number of components (1 for scalar, 2 for spinor, 4 for Dirac spinor)
  * @param spin_type: "Large", "Small"
  */
-template <int D> CompFunction<D>::CompFunction(std::string spin, int nComponents, std::string spin_type) {
-    // --- Setting up the pointers to the trees
-    func_ptr = std::make_shared<TreePtr<D>>(false);
-    CompD = func_ptr->real;
-    CompC = func_ptr->cplx;
-    for (int i = 0; i < 4; i++) CompD[i] = nullptr;
-    for (int i = 0; i < 4; i++) CompC[i] = nullptr;
+// template <int D> CompFunction<D>::CompFunction(std::string spin, int nComponents, std::string spin_type) {
+//     // --- Setting up the pointers to the trees
+//     func_ptr = std::make_shared<TreePtr<D>>(false);
+//     CompD = func_ptr->real;
+//     CompC = func_ptr->cplx;
+//     for (int i = 0; i < 4; i++) CompD[i] = nullptr;
+//     for (int i = 0; i < 4; i++) CompC[i] = nullptr;
 
-    // --- Setting up spin
-    // first determine if large or small component
-    int spin_index = 0;
-    if (spin_type == "Large" || spin_type == "large" || spin_type == "L" || spin_type == "l") { // Default, Keeping this here (even though it's redundant) just to make the code more readable
-        spin_index = 0;
-    }
-    else if (spin_type == "Small" || spin_type == "small" || spin_type == "S" || spin_type == "s") {
-        spin_index = 2;
-    }
-    else {
-        MSG_ERROR( "CompFunction: unknown component type ");
-    }
-    if (spin == "Paired" || spin == "paired" || spin == "P" || spin == "p")
-        func_ptr->data.n1[spin_index] = 2;
-    else if (spin == "Alpha" || spin == "alpha" || spin == "A" || spin == "a")
-        func_ptr->data.n1[spin_index] = 1;
-    else if (spin == "Beta" || spin == "beta" || spin == "B" || spin == "b")
-        func_ptr->data.n1[spin_index + 1] = 1;
-    else {
-        MSG_ERROR( "CompFunction: unknown spin type ");
-    }
-    // func_ptr->data.n1[0] = n1;
-    // func_ptr->data.n2[0] = -1;
-    // func_ptr->data.n3[0] = 0;
-    func_ptr->rank = 0;
-    func_ptr->isreal = 1;
-    func_ptr->iscomplex = 0;
-    func_ptr->data.shared = false;
-    func_ptr->data.Ncomp = nComponents;
-}
+//     // --- Setting up spin
+//     // first determine if large or small component
+//     int spin_index = 0;
+//     if (spin_type == "Large" || spin_type == "large" || spin_type == "L" || spin_type == "l") { // Default, Keeping this here (even though it's redundant) just to make the code more readable
+//         spin_index = 0;
+//     }
+//     else if (spin_type == "Small" || spin_type == "small" || spin_type == "S" || spin_type == "s") {
+//         spin_index = 2;
+//     }
+//     else {
+//         MSG_ERROR( "CompFunction: unknown component type ");
+//     }
+//     if (spin == "Paired" || spin == "paired" || spin == "P" || spin == "p")
+//         func_ptr->data.n1[spin_index] = 2;
+//     else if (spin == "Alpha" || spin == "alpha" || spin == "A" || spin == "a")
+//         func_ptr->data.n1[spin_index] = 1;
+//     else if (spin == "Beta" || spin == "beta" || spin == "B" || spin == "b")
+//         func_ptr->data.n1[spin_index + 1] = 1;
+//     else {
+//         MSG_ERROR( "CompFunction: unknown spin type ");
+//     }
+//     // func_ptr->data.n1[0] = n1;
+//     // func_ptr->data.n2[0] = -1;
+//     // func_ptr->data.n3[0] = 0;
+//     func_ptr->rank = 0;
+//     func_ptr->isreal = 1;
+//     func_ptr->iscomplex = 0;
+//     func_ptr->data.shared = false;
+//     func_ptr->data.Ncomp = nComponents;
+// }
 
 /*
  * Empty functions (no components defined)
  */
-template <int D> CompFunction<D>::CompFunction(int n1, bool share) {
+template <int D> CompFunction<D>::CompFunction(int n1, bool share, int nComponents) {
     func_ptr = std::make_shared<TreePtr<D>>(share);
     CompD = func_ptr->real;
     CompC = func_ptr->cplx;
@@ -136,6 +136,7 @@ template <int D> CompFunction<D>::CompFunction(int n1, bool share) {
     func_ptr->isreal = 1;
     func_ptr->iscomplex = 0;
     func_ptr->data.shared = share;
+    func_ptr->data.Ncomp = nComponents;
 }
 
 /*
@@ -673,6 +674,7 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
                 }
             }
         } else {
+            // At least one of the inputs is complex
             // if one of the input is real, we simply make a new complex copy of it
             bool inp_aisReal = inp_a.isreal();
             bool inp_bisReal = inp_b.isreal();
@@ -805,7 +807,7 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
     for (int comp = 0; comp < bra.Ncomp(); comp++) {
         // std::cout << "CompFunction dot: comp " << comp << std::endl;
         ComplexDouble dotprod = 0.0;
-        if (bra.func_ptr->data.n1[0] != ket.func_ptr->data.n1[0] and bra.func_ptr->data.n1[0] != 0 and ket.func_ptr->data.n1[0] != 0) continue;
+        // if (bra.func_ptr->data.n1[0] != ket.func_ptr->data.n1[0] and bra.func_ptr->data.n1[0] != 0 and ket.func_ptr->data.n1[0] != 0) continue;
         // std::cout << "CompFunction dot: tut " << comp << std::endl;
         // ComplexDouble dotprodtmp = 0.0;
         if (bra.isreal() and ket.isreal()) {
@@ -916,36 +918,33 @@ void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r
 // }
 
 // template <int D, typename T>
-void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec) {
+void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec, int cmplx) {
     bool need_to_project = not(out.isShared()) or mpi::share_master();
-    // std::cout << "project " << need_to_project << " " << &out<< std::endl;
-    out.func_ptr->isreal = 0;
-    out.func_ptr->iscomplex = 1;
+    out.func_ptr->isreal = (1-cmplx)%2;
+    out.func_ptr->iscomplex = cmplx%2; //mod 2 as a safety measure
 
-    if (out.Ncomp() <= compIndex) std::cerr << "CompFunction::project:  Trying to project onto a component that is not defined for the spinor" << std::endl;
+    // This variable ensures that scalar function do not allocate additional components
+    bool need_to_allocate = true;
+    if (out.Ncomp() < 2) {need_to_allocate = false;}
 
-    for (int i = 0; i < out.Ncomp(); i++) {
-        out.alloc_comp(i);
-    }
-    // std::cout << "ptut1 " << compIndex << " "<< need_to_project << std::endl;
-    // std::cout << &out.CompC[0] << std::endl; // Debugging line to check the address of CompC
-    // std::cout << &out.CompC[1] << std::endl; // Debugging line to check the address of CompC
-    // if (need_to_project) mrcpp::project<3>(prec, *out.CompC[compIndex], f);
+    // lambda function when we need to initialise a component to zero
     std::function<ComplexDouble(const Coord<3>&)> fzero = [](const Coord<3> &r) -> ComplexDouble { return ComplexDouble(0.0, 0.0); };
 
+    // allocating and projecting the component(s)
     for (int i = 0; i < out.Ncomp(); i++) {
         if (i == compIndex) {
+            out.alloc_comp(i);
             mrcpp::project<3>(prec, *out.CompC[i], f);
-        } else {
+        } else if (need_to_allocate) {
             // out.CompC[i]->setZero();
+            out.alloc_comp(i);
             mrcpp::project<3>(prec, *out.CompC[i], fzero);
         }
     };
-    // std::cout << "ptut2" << std::endl;
-    // ComplexDouble outut = dot(out, out);
-    // std::cout << "ptut3 " << outut << std::endl;
+
     mpi::share_function(out, 0, 123123, mpi::comm_share); //The 0 is the rank of the master process, 123123 is a tag for the message
 }
+
 
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec) {
     bool need_to_project = not(out.isShared()) or mpi::share_master();
