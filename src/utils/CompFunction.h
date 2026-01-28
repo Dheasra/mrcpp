@@ -170,7 +170,9 @@ public:
     std::shared_ptr<mrcpp::TreePtr<D>> func_ptr;
 };
 
+template <int D> void CopyToComplex(CompFunction<D> &out, const CompFunction<D> &inp);
 template <int D> void deep_copy(CompFunction<D> *out, const CompFunction<D> &inp);
+// void CopyToComplex(CompFunction<3> &out, const CompFunction<3> &inp);
 template <int D> void deep_copy(CompFunction<D> &out, const CompFunction<D> &inp);
 template <int D> void add(CompFunction<D> &out, ComplexDouble a, CompFunction<D> inp_a, ComplexDouble b, CompFunction<D> inp_b, double prec, bool conjugate = false);
 template <int D> void linear_combination(CompFunction<D> &out, const std::vector<ComplexDouble> &c, std::vector<CompFunction<D>> &inp, double prec, bool conjugate = false);
@@ -186,7 +188,9 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
 // template <int D> ComplexDouble dot(CompFunction<D> &bra, CompFunction<D> &ket);
 template <int D> double node_norm_dot(CompFunction<D> bra, CompFunction<D> ket);
 void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec);
+void project_real(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec); //overload of project is not always recognized by the compiler
 void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec);
+void project_cplx(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec); //overload of project is not always recognized by the compiler
 void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec, int cmplx = 1);
 // ComplexDouble fzero(const Coord<3> &r);
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec);
