@@ -162,6 +162,7 @@ template <int D> CompFunction<D>::CompFunction(const CompFunction<D> &compfunc) 
     func_ptr = compfunc.func_ptr;
     CompD = func_ptr->real;
     CompC = func_ptr->cplx;
+    func_ptr->data.Ncomp = compfunc.func_ptr->data.Ncomp;
 }
 
 /** @brief Copy constructor
