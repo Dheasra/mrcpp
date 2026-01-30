@@ -982,27 +982,49 @@ void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(co
     mpi::share_function(out, 0, 123123, mpi::comm_share); //The 0 is the rank of the master process, 123123 is a tag for the message
 }
 
-
-template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec) {
+/* @brief Project a RepresentableFunction onto a real-valued CompFunction
+ * @param out Output CompFunction
+ * @param f Input RepresentableFunction 
+ * @param prec Precision for the projection
+ * @param comp Component index to project onto
+ */
+template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec, int comp) {
+    //mpi shenanigans
     bool need_to_project = not(out.isShared()) or mpi::share_master();
     out.func_ptr->isreal = 1;
     out.func_ptr->iscomplex = 0;
+    // allocating a component if compFunction is empty
     if (out.Ncomp() < 1) out.alloc(1);
-    if (need_to_project) build_grid(*out.CompD[0], f);
-    if (need_to_project) mrcpp::project<D, double>(prec, *out.CompD[0], f);
+    // projections
+    if (need_to_project) build_grid(*out.CompD[comp], f);
+    if (need_to_project) mrcpp::project<D, double>(prec, *out.CompD[comp], f);
+    //mpi shenanigans 2: electric boogaloo
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
-template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec) {
+
+/* @brief Project a RepresentableFunction onto a complex-valued CompFunction
+ * @param out Output CompFunction
+ * @param f Input RepresentableFunction 
+ * @param prec Precision for the projection
+ * @param comp Component index to project onto
+ */
+template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec, int comp) {
     bool need_to_project = not(out.isShared()) or mpi::share_master();
     out.func_ptr->isreal = 0;
     out.func_ptr->iscomplex = 1;
     if (out.Ncomp() < 1) out.alloc(1);
-    if (need_to_project) build_grid(*out.CompC[0], f);
-    if (need_to_project) mrcpp::project<D, ComplexDouble>(prec, *out.CompC[0], f);
+    //projections onto the complex-valued components
+    if (need_to_project) build_grid(*out.CompC[comp], f); 
+    if (need_to_project) mrcpp::project<D, ComplexDouble>(prec, *out.CompC[comp], f);
+    //mpi 
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
 
-// CompFunctionVector
+
+
+// =============================================================================
+// =========================CompFunctionVector==================================
+// =============================================================================
 
 CompFunctionVector::CompFunctionVector(int N)
         : std::vector<CompFunction<3>>(N) {
