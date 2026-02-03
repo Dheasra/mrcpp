@@ -393,8 +393,10 @@ int main(int argc, char **argv) {
 
     std::cout << "tut1" << '\n';
     CompFunction<3> Psi_alt_1(mra, 2);
-    project(Psi_alt_1, 0, Be_1s, building_precision); // Initialize the Psi_alt_1 function to zero
+    project(Psi_alt_1, Be_1s, building_precision, 0); // Initialize the Psi_alt_1 function to zero
+    std::cout << "tut1bis" << '\n';
     normalize_spinor(Psi_alt_1, building_precision); // Normalize the Psi_alt_1 function
+    std::cout << "tut1bisbis" << '\n';
     ComplexDouble dotest = dot(Psi_alt_1, Psi_alt_1);
     // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
     std::cout << dotest << '\n';
@@ -405,7 +407,7 @@ int main(int argc, char **argv) {
     std::cout << "tut3" << '\n';
     // project(kramer_1, 0, zero, building_precision); // Initialize the kramer_1 function to zero
     std::cout << "tut4" << '\n';
-    project(kramer_1, 1, Be_1s, building_precision); // Initialize the kramer_1 function to zero
+    project(kramer_1, Be_1s, building_precision, 1); // Initialize the kramer_1 function to zero
     normalize_spinor(kramer_1, building_precision); // Normalize the Psi_alt_1 function
     ComplexDouble dotesta = dot(kramer_1, kramer_1);
     // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
