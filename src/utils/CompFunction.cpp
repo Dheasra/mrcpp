@@ -814,7 +814,7 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDoub
     func_a.CompC[0] = nullptr;
 }
 
-/** @brief Compute <bra|ket> = int bra^\dag(r) * ket(r) dr.
+/** @brief Compute <bra|ket> = \int_Domain \bra^\dagger(r) * \ket(r) dr.
  *
  *  Sum of component dots.
  *  Notice that the <bra| position is complex conjugated in the tree multiplication.
@@ -832,7 +832,7 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
         // std::cout << "CompFunction dot: tut " << comp << std::endl;
         // ComplexDouble dotprodtmp = 0.0;
         if (bra.isreal() and ket.isreal()) {
-            // std::cout << "CompFunction dot: both real" << std::endl;
+            std::cout << "CompFunction dot: both real" << std::endl;
             dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
             //Computing the dot product of the current components
             // ComplexDouble dotprodtmp = 0.0;
@@ -843,7 +843,7 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
             // dotprod += dotprodtmp;
             // std::cout << "CompFunction dot: bra real" << &bra.CompD[comp] << &ket.CompD[comp] << std::endl;
         } else if (bra.isreal() and ket.iscomplex()) {
-            // std::cout << "CompFunction dot: bra real" << std::endl;
+            std::cout << "CompFunction dot: bra real" << std::endl;
             dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompC[comp]);
                         // std::cout << "CompFunction dot: both real" << std::endl;
             //Computing the dot product of the current components
@@ -855,7 +855,7 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
             // dotprod += dotprodtmp;
             // std::cout << "CompFunction dot: bra real" << &bra.CompD[comp] << &ket.CompD[comp] << std::endl;
         } else if (bra.iscomplex() and ket.isreal()) {
-            // std::cout << "CompFunction dot: bra complex" << &bra.CompC[comp] << &ket.CompC[comp] << std::endl;
+            std::cout << "CompFunction dot: bra complex" << &bra.CompC[comp] << &ket.CompC[comp] << std::endl;
             dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompD[comp]);
                         // std::cout << "CompFunction dot: both real" << std::endl;
             //Computing the dot product of the current components
@@ -867,7 +867,7 @@ template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunctio
             // dotprod += dotprodtmp;
             // std::cout << "CompFunction dot: bra real" << &bra.CompD[comp] << &ket.CompD[comp] << std::endl;
         } else {
-            // std::cout << "CompFunction dot: both complex" << std::endl;
+            std::cout << "CompFunction dot: both complex" << std::endl;
             dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompC[comp]);
                         // std::cout << "CompFunction dot: both real" << std::endl;
             //Computing the dot product of the current components
@@ -925,10 +925,9 @@ void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, d
     bool need_to_project = not(out.isShared()) or mpi::share_master();
     out.func_ptr->isreal = 1;
     out.func_ptr->iscomplex = 0;
-    std::cout << "Projecting real function onto component " << comp << std::endl;
+    // std::cout << "Projecting real function onto component " << comp << std::endl;
     // allocating a component if compFunction is empty
     if (out.Ncomp() < 1) out.alloc(1);
-    // This variable ensures that scalar function do not allocate additional components
     // This variable ensures that scalar function do not allocate additional components
     bool need_to_allocate = true;
     if (out.Ncomp() < 2) {need_to_allocate = false;}
@@ -1056,32 +1055,36 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, dou
     bool need_to_project = not(out.isShared()) or mpi::share_master();
     out.func_ptr->isreal = 1;
     out.func_ptr->iscomplex = 0;
-    // // allocating a component if compFunction is empty
-    // if (out.Ncomp() < 1) out.alloc(1);
-    // // This variable ensures that scalar function do not allocate additional components
-    // bool need_to_allocate = true;
-    // if (out.Ncomp() < 2) {need_to_allocate = false;}
 
-    // // lambda function when we need to initialise a component to zero
-    // std::function<double(const Coord<D>&)> fzero = [](const Coord<D> &r) -> double { return 0.0; };
+    // allocating a component if compFunction is empty
+    if (out.Ncomp() < 1) out.alloc(1);
+    // This variable ensures that scalar function do not allocate additional components
+    bool need_to_allocate = true;
+    if (out.Ncomp() < 2) {need_to_allocate = false;}
 
-    // // allocating and projecting the component(s)
-    // for (int i = 0; i < out.Ncomp(); i++) {
-    //     if (i == comp) {
-    //         out.alloc_comp(i);
-    //         mrcpp::project<D, double>(prec, *out.CompC[i], f);
-    //     } else if (need_to_allocate) {
-    //         // out.CompC[i]->setZero();
-    //         out.alloc_comp(i);
-    //         mrcpp::project<D, double>(prec, *out.CompC[i], fzero);
-    //     }
-    // };
-    // projections
-    if (need_to_project) build_grid(*out.CompD[comp], f);
+    // lambda function when we need to initialise a component to zero
+    std::function<double(const Coord<D>&)> fzero = [](const Coord<D> &r) -> double { return 0.0; };
+
+    // allocating and projecting the component(s)
     if (need_to_project) {
-        out.alloc_comp(comp);
-        mrcpp::project<D, double>(prec, *out.CompD[comp], f);
+        for (int i = 0; i < out.Ncomp(); i++) {
+            if (i == comp) {
+                build_grid(*out.CompD[i], f); 
+                out.alloc_comp(i);
+                mrcpp::project<D, double>(prec, *out.CompD[i], f);
+            } else if (need_to_allocate) {
+                // build_grid(*out.CompD[i], fzero); // commented out as it is probably unnecessary for a zero function
+                out.alloc_comp(i);
+                mrcpp::project<D, double>(prec, *out.CompD[i], fzero);
+            }
+        }
     }
+    // // projections
+    // if (need_to_project) build_grid(*out.CompD[comp], f);
+    // if (need_to_project) {
+    //     out.alloc_comp(comp);
+    //     mrcpp::project<D, double>(prec, *out.CompD[comp], f);
+    // }
     //mpi
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
@@ -1097,10 +1100,34 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, Com
     bool need_to_project = not(out.isShared()) or mpi::share_master();
     out.func_ptr->isreal = 0;
     out.func_ptr->iscomplex = 1;
+
+        // allocating a component if compFunction is empty
     if (out.Ncomp() < 1) out.alloc(1);
-    //projections onto the complex-valued components
-    if (need_to_project) build_grid(*out.CompC[comp], f); 
-    if (need_to_project) mrcpp::project<D, ComplexDouble>(prec, *out.CompC[comp], f);
+    // This variable ensures that scalar function do not allocate additional components
+    bool need_to_allocate = true;
+    if (out.Ncomp() < 2) {need_to_allocate = false;}
+
+    // lambda function when we need to initialise a component to zero
+    std::function<ComplexDouble(const Coord<D>&)> fzero = [](const Coord<D> &r) -> ComplexDouble { return ComplexDouble(0.0, 0.0); };
+
+    // allocating and projecting the component(s)
+    if (need_to_project) {
+        for (int i = 0; i < out.Ncomp(); i++) {
+            if (i == comp) {
+                build_grid(*out.CompC[i], f); 
+                out.alloc_comp(i);
+                mrcpp::project<D, ComplexDouble>(prec, *out.CompC[i], f);
+            } else if (need_to_allocate) {
+                // build_grid(*out.CompC[i], fzero); // commented out as it is probably unnecessary for a zero function
+                out.alloc_comp(i);
+                mrcpp::project<D, ComplexDouble>(prec, *out.CompC[i], fzero);
+            }
+        }
+    }
+    // if (out.Ncomp() < 1) out.alloc(1);
+    // //projections onto the complex-valued components
+    // if (need_to_project) build_grid(*out.CompC[comp], f); 
+    // if (need_to_project) mrcpp::project<D, ComplexDouble>(prec, *out.CompC[comp], f);
     //mpi 
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
@@ -2142,6 +2169,7 @@ ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi) {
     ComplexMatrix S_m12 = math_utils::hermitian_matrix_pow(S_tilde, -1.0 / 2.0);
     return S_m12;
 }
+
 /** @brief Compute Löwdin orthonormalization matrix for a 2 component orbital vector
  *
  * @param Phi: orbitals to orthonomalize

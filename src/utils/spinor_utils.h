@@ -17,6 +17,6 @@ namespace mrcpp {
     // std::array<std::array<ComplexDouble>> compute_overlap(const CompFunction<3> &bra, const CompFunction<3> &ket, double prec = -1.0, bool conjugate = false);
 
     // void compute_overlap_kramer_partner(ComplexDouble &overlap, const CompFunction<3> &bra, const CompFunction<3> &ket, double prec = -1.0, bool conjugate = false);
-    CompFunctionVector disjoin(CompFunctionVector &Phi, int spin);
-    CompFunctionVector adjoin(CompFunctionVector &Phi_a, CompFunctionVector &Phi_b);
+    // CompFunctionVector disjoin(CompFunctionVector &Phi, int spin);
+    // CompFunctionVector adjoin(CompFunctionVector &Phi_a, CompFunctionVector &Phi_b);
 }

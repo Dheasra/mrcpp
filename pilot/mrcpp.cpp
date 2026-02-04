@@ -418,15 +418,17 @@ int main(int argc, char **argv) {
     ComplexDouble dotut1 = dot(Psi_alt_1, kramer_1);
     std::cout << dotut1 << '\n';
     std::cout << "tut6" << '\n';
-    CompFunction<3> Psi_alt_2(mra,2);
-    // project(Psi_alt_2, 0, zero, building_precision);
+    CompFunction<3> Psi_alt_2(mra, 2);
+    // project(Psi_alt_2, zero, building_precision, 0);
+    // CompFunction<3> Psi_alt_2(Psi_alt_1); // Copy constructor
+    std::cout << "tut6bis " << Psi_alt_2.Ncomp() << '\n';
     // normalize_spinor(Psi_alt_2, building_precision);
-    apply_Pauli(Psi_alt_2, Psi_alt_1, 1, building_precision, false); // Apply the Pauli operator to the first component of Psi_1
+    apply_Pauli(Psi_alt_2, Psi_alt_1, 1, building_precision, false); // Apply the y Pauli operator to the first component of Psi_1
     // kramer_1 = copy(Psi_1);
     ComplexDouble dotestb = dot(Psi_alt_2, Psi_alt_2);
     std::cout << dotestb << '\n';
 
-    std::cout << "tut6bis" << '\n';
+    std::cout << "tut6bisbis" << '\n';
     ComplexDouble dotut = dot(kramer_1, Psi_alt_2);
     // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
     std::cout << dotut << '\n';
