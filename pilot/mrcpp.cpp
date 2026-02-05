@@ -421,12 +421,12 @@ int main(int argc, char **argv) {
     CompFunction<3> Psi_alt_2(mra, 2);
     // project(Psi_alt_2, zero, building_precision, 0);
     // CompFunction<3> Psi_alt_2(Psi_alt_1); // Copy constructor
-    std::cout << "tut6bis " << Psi_alt_2.Ncomp() << '\n';
+    std::cout << "tut6bis " << Psi_alt_2.isreal() << '\n';
     // normalize_spinor(Psi_alt_2, building_precision);
     apply_Pauli(Psi_alt_2, Psi_alt_1, 1, building_precision, false); // Apply the y Pauli operator to the first component of Psi_1
     // kramer_1 = copy(Psi_1);
     ComplexDouble dotestb = dot(Psi_alt_2, Psi_alt_2);
-    std::cout << dotestb << '\n';
+    std::cout << dotestb << " " << kramer_1.isreal() << '\n';
 
     std::cout << "tut6bisbis" << '\n';
     ComplexDouble dotut = dot(kramer_1, Psi_alt_2);

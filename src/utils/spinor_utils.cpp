@@ -28,13 +28,30 @@ namespace mrcpp {
         case 0:
             // Apply Pauli-X matrix
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                out.setReal(inp.CompD[i+1], i); //WARNING: No copy might create some issues down the line
-                out.setCplx(inp.CompC[i+1], i); //WARNING: No copy might create some issues down the line
+                // out.setReal(inp.CompD[i+1], i); //WARNING: No copy might create some issues down the line
+                // out.setCplx(inp.CompC[i+1], i); //WARNING: No copy might create some issues down the line
+                // // out.CompC[i] = inp.CompC[i+1]; //WARNING: No copy might create some issues down the line
+                // // out.CompC[i+1] = inp.CompC[i];
+                // out.setReal(inp.CompD[i], i+1); //WARNING: No copy might create some issues down the line
+                // out.setCplx(inp.CompC[i], i+1); //WARNING: No copy might create some issues down the line
+                if (inp.isreal() == 1) {
+                    out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
+                    // Warning: shallow copy
+                    out.CompD[i] = inp.CompD[i+1];
+                    out.CompD[i+1] = inp.CompD[i];
+                    // out.setReal(inp.CompD[i+1], i);
+                    // out.setReal(inp.CompD[i], i+1);
+
+                } else {
+                    out.defcomplex(); // Safety catch for later operations on out. If the input is complex, the output should also be defined as complex
+                    // Warning: shallow copy
+                    out.CompC[i] = inp.CompC[i+1];
+                    out.CompC[i+1] = inp.CompC[i];
+                    // out.setCplx(inp.CompC[i+1], i);
+                    // out.setCplx(inp.CompC[i], i+1);
+                }
+                // coefficient multiplication needn't be done separately for real and complex cases, since the coefficient is purely imaginary, so it will just be multiplied to the complex part of the function, even if the function is defined as real. However, we need to make sure that the output function is defined as complex in this case, otherwise we might run into issues later on when trying to multiply it by a complex coefficient. 
                 out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i+1];
-                // out.CompC[i] = inp.CompC[i+1]; //WARNING: No copy might create some issues down the line
-                // out.CompC[i+1] = inp.CompC[i];
-                out.setReal(inp.CompD[i], i+1); //WARNING: No copy might create some issues down the line
-                out.setCplx(inp.CompC[i], i+1); //WARNING: No copy might create some issues down the line
                 out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i];
             }
             break;
@@ -42,44 +59,53 @@ namespace mrcpp {
             // Apply Pauli-Y matrix
             // std::cout << "apply Pauli Y tut0 " << out.Ncomp() << " " << inp.Ncomp() << '\n';
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                // ComplexDouble dotut0 = dot(out, out);
-                std::cout << "Applying Pauli-Y matrix " << i << std::endl;
-                // out.CompC[i] = inp.CompC[i+1]; //WARNING: No copy might create some issues down the line
-                out.setReal(inp.CompD[i+1], i); //WARNING: No copy might create some issues down the line
-                out.setCplx(inp.CompC[i+1], i); //WARNING: No copy might create some issues down the line
-                // std::cout << "apply Pauli Y tut1" << '\n'; 
-                // out.CompC[i]->rescale(-1.0i); //Là j'utilise le rescale des functiontree, pas celui de CompFunction TODO: créer un rescale qui ne change que un seul terme
-                out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i+1] * (-1.0)*comp_i;
-                // out.func_ptr->data.c1[i] *= comp_i;
-                // std::cout << "apply Pauli Y tut2" << '\n';
-                // out.CompC[i+1] = inp.CompC[i];
-                out.setReal(inp.CompD[i], i+1); //WARNING: No copy might create some issues down the line
-                out.setCplx(inp.CompC[i], i+1); //WARNING: No copy might create some issues down the line
-                // std::cout << "apply Pauli Y tut3" << '\n';
-                // out.CompC[i+1]->rescale(1.0i);
-                out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i] * comp_i;
-                // out.func_ptr->data.c1[i+1] *= -1.0*comp_i;
-                // std::cout << "apply Pauli Y tut4 pouet" << '\n';
+                // std::cout << "Applying Pauli-Y matrix " << i << " " << inp.isreal() << std::endl;
+                if (inp.isreal() == 1) {
+                    out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
+                    // Warning: shallow copy
+                    out.setReal(inp.CompD[i+1], i);
+                    out.setReal(inp.CompD[i], i+1);
+                    // out.CompD[i] = inp.CompD[i+1];
+                    // out.CompD[i+1] = inp.CompD[i];
 
-                // rescale(1.0, out.CompC[i], -1.0i, inp.CompC[i+1]); //WARNING: No copy might create some issues down the line
-                // out.CompC[i+1]->multiply(1.0i, inp.CompC[i]);
-                // ComplexDouble dotuta = dot(inp, inp);
-                // std::cout << "apply Pauli Y tut5" << dotuta << '\n';
-                // ComplexDouble dotutb = dot(out, out);
-                // std::cout << "apply Pauli Y tut6" << dotutb << '\n';
-                // ComplexDouble dotutc = dot(out, inp);
-                // std::cout << "apply Pauli Y tut7" << dotutc << '\n';
+                } else {
+                    out.defcomplex(); // Safety catch for later operations on out. If the input is complex, the output should also be defined as complex
+                    // Warning: shallow copy
+                    out.setCplx(inp.CompC[i+1], i);
+                    out.setCplx(inp.CompC[i], i+1);
+                    // out.CompC[i] = inp.CompC[i+1];
+                    // out.CompC[i+1] = inp.CompC[i];
+                }
+                // coefficient multiplication needn't be done separately for real and complex cases, since the coefficient is purely imaginary, so it will just be multiplied to the complex part of the function, even if the function is defined as real. However, we need to make sure that the output function is defined as complex in this case, otherwise we might run into issues later on when trying to multiply it by a complex coefficient.
+                out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i+1] * (-1.0)*comp_i;
+                out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i] * comp_i;
             }
             break;
         case 2:
             // Apply Pauli-Z matrix
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                // out.CompC[i]->multiply(-1.0i, inp.CompC[i+1]); //WARNING: No copy might create some issues down the line
-                out.setReal(inp.CompD[i], i); //WARNING: No copy might create some issues down the line
-                out.setCplx(inp.CompC[i], i); //WARNING: No copy might create some issues down the line
-                // out.CompC[i] = inp.CompC[i]; //WARNING: No copy might create some issues down the line
+                // // out.CompC[i]->multiply(-1.0i, inp.CompC[i+1]); //WARNING: No copy might create some issues down the line
+                // out.setReal(inp.CompD[i], i); //WARNING: No copy might create some issues down the line
+                // out.setCplx(inp.CompC[i], i); //WARNING: No copy might create some issues down the line
+                // // out.CompC[i] = inp.CompC[i]; //WARNING: No copy might create some issues down the line
+                if (inp.isreal() == 1) {
+                    out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
+                    // Warning: shallow copy
+                    out.setReal(inp.CompD[i], i); 
+                    out.setReal(inp.CompD[i+1], i+1); 
+                    // out.CompD[i] = inp.CompD[i+1];
+                    // out.CompD[i+1] = inp.CompD[i];
+
+                } else {
+                    out.defcomplex(); // Safety catch for later operations on out. If the input is complex, the output should also be defined as complex
+                    // Warning: shallow copy
+                    out.setCplx(inp.CompC[i], i); 
+                    out.setCplx(inp.CompC[i+1], i+1); 
+                    // out.CompC[i] = inp.CompC[i+1]; 
+                    // out.CompC[i+1] = inp.CompC[i];
+                }
                 out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i];
-                // out.CompC[i+1] = inp.CompC[i+1]; //WARNING: No copy might create some issues down the line
+                // out.CompC[i+1] = inp.CompC[i+1]; 
                 // out.CompC[i+1]->rescale(-1.0);
                 out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i+1] * (-1.0);
                 // out.func_ptr->data.c1[i+1] *= -1.0;
@@ -90,46 +116,28 @@ namespace mrcpp {
         }
     }
     
-    // void dot_spinor(CompFunction<3> &out, const CompFunction<3> &inp_a, const CompFunction<3> &inp_b, double prec, bool conjugate) {
-    //     // Implementation of the dot product for spinor functions
-    //     // This function computes the dot product of two spinor functions and stores the result in 'out'.
-    //     if (inp_a.Ncomp() != inp_b.Ncomp()) {
-    //         std::cerr << "dot_spinor: Input functions must have the same number of components." << std::endl;
-    //         return;
-    //     }
-    //     if (out.Ncomp() != 1) {
-    //         std::cerr << "dot_spinor: Output function must have exactly one component." << std::endl;
-    //         return;
-    //     }
-    //     // Compute the dot product
-    //     // ComplexDouble result = 0.0;
-    //     for (int i = 0; i < inp_a.Ncomp(); ++i) {
-    //         auto tmp_add = 
-    //         // ComplexDouble val_a = inp_a.CompC[i]->integrate();
-    //         // ComplexDouble val_b = conjugate ? std::conj(inp_b.CompC[i]->integrate()) : inp_b.CompC[i]->integrate();
-    //         // result += val_a * val_b;
-    //     }
-    //     out.CompC[0]->setValue(result);
-    // }
-
     void normalize_spinor(CompFunction<3> &inp, double prec) {
         // Implementation of normalization for spinor functions
         // This function normalizes the input spinor function 'inp' in place.
-        // if (inp.Ncomp() != 2 && inp.Ncomp() != 4) {
-        //     std::cerr << "normalize_spinor: Input function must have 2 or 4 components." << std::endl;
-        //     return;
-        // }
+ 
         double norm = inp.norm();
         if (norm < prec) {
             std::cerr << "normalize_spinor: Norm is too small, cannot normalize." << std::endl;
             return;
         }
         // inp.rescale(1.0 / norm);
-        for (int i = 0; i < inp.Ncomp(); i++) {
-            inp.func_ptr->data.c1[i] *= 1.0 / norm; // Normalize each component
-            // inp.CompC[i]->rescale(1.0 / norm); //WARNING: No copy might create some issues down the line
-            // inp.CompC[i]->func_ptr->data.c1[i] *= 1.0 / norm; // Normalize each component
-            // std::cout << "normalize_spinor: Component " << i << " normalized." << std::endl;
+        if (inp.isreal() == 1) {
+            for (int i = 0; i < inp.Ncomp(); i++) {
+                inp.CompD[i]->rescale(1.0 / norm); //Rescaling each component in place
+                inp.func_ptr->data.c1[i] = 1.0; // Resetting the overall multiplicative factor to 1 after normalization, since the components have already been rescaled.
+                // std::cout << "normalize_spinor: Component " << i << " normalized." << std::endl;
+            }
+        } else {
+            for (int i = 0; i < inp.Ncomp(); i++) {
+                inp.CompC[i]->rescale(1.0 / norm); //Rescaling each component in place
+                inp.func_ptr->data.c1[i] = ComplexDouble(1.0,0.0); // Resetting the overall multiplicative factor to 1 after normalization, since the components have already been rescaled.
+                // std::cout << "normalize_spinor: Component " << i << " normalized." << std::endl;
+            }
         }
     }
 
