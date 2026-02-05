@@ -2141,6 +2141,7 @@ ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi) {
  *
  * Computes the inverse square root of the orbital overlap matrix S^(-1/2)sk
  */
+// I don't know what this would be useful for, maybe remove it?
 ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVector &Phi_bottom) {
     // std::cout << "tut" << std::endl;
     ComplexMatrix S_tilde_t = calc_overlap_matrix(Phi_top);
@@ -2213,7 +2214,13 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
         std::vector<int> indexVec;    // serialIx of the nodes
         for (int j = 0; j < N; j++) {
             // make vector with all coef pointers and their indices in the union grid
-            BraKet[j].complex().makeCoeffVector(coeffVec[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            //TODO: ajouter un argument pour faire que complex() retourne les autres composantes
+            std::vector<std::vector<ComplexDouble *>> coeffVec_temp(N);
+            for (int k = 0; k < BraKet[j].Ncomp(); k++) {
+                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC
+                if (BraKet[j].Ncomp() < 2) {comp_idx_shift = BraKet[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 componenet Beta function, as the function itself is stored in the second component of CompC
+                BraKet[j].complex(k + comp_idx_shift).makeCoeffVector(coeffVec[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            }
             // make a map that gives j from indexVec
             int orb_node_ix = 0;
             for (int ix : indexVec) {
@@ -2826,7 +2833,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 csize = sizecoeffW;
             if (serial) {
                 int node_ix = indexVec_ref[n];      // SerialIx for this node in the reference tree
-                int shift = sizecoeff - sizecoeffW; // to copy only wavelet part
+                int shift = sizecoeff - sizecoeffW; // to copy only wavelet part (no scaling function contribution)
                 DoubleMatrix coeffBlockBra(csize, node2orbVecBra[node_ix].size());
                 DoubleMatrix coeffBlockKet(csize, node2orbVecKet[node_ix].size());
                 if (parindexVec_ref[n] < 0) shift = 0;

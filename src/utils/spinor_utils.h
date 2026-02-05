@@ -19,6 +19,7 @@ namespace mrcpp {
      * The function is normalized by rescaling each component by the same factor, i.e. Psi_i -> Psi_i / ||Psi||. 
      * @param inp The input spinor function to be normalized. It is modified in place.
      * @param prec The precision for the normalization. If the norm is smaller than prec, the norm is considered to be zero.
+     * NOTE: This function rescales the components of the input function rather as well as 
      */
     void normalize_spinor(CompFunction<3> &inp, double prec = -1.0);
 
