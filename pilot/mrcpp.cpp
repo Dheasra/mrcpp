@@ -434,6 +434,9 @@ int main(int argc, char **argv) {
     std::cout << dotut << '\n';
     std::cout << "tut7" << '\n';
     
+    CompFunctionVector Psi_vector(2);
+    Psi_vector.push_back(Psi_alt_1);
+    Psi_vector.push_back(Psi_alt_2);
 
 
     // mrcpp::CompFunction<3> Psi_tmp1(mra);

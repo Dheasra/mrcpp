@@ -2166,7 +2166,7 @@ ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVec
     return S_m12;
 }
 
-/** @brief Orbital transformation out_j = sum_i inp_i*U_ij
+/** @brief Computes the overlap matrix S for complex-valued orbital vector
  *
  * NOTE: OrbitalVector is considered a ROW vector, so rotation
  *       means matrix multiplication from the right
@@ -2214,12 +2214,20 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
         std::vector<int> indexVec;    // serialIx of the nodes
         for (int j = 0; j < N; j++) {
             // make vector with all coef pointers and their indices in the union grid
-            //TODO: ajouter un argument pour faire que complex() retourne les autres composantes
-            std::vector<std::vector<ComplexDouble *>> coeffVec_temp(N);
+            std::vector<std::vector<ComplexDouble *>> coeffVecTemp(N);
+            // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
             for (int k = 0; k < BraKet[j].Ncomp(); k++) {
-                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC
-                if (BraKet[j].Ncomp() < 2) {comp_idx_shift = BraKet[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 componenet Beta function, as the function itself is stored in the second component of CompC
-                BraKet[j].complex(k + comp_idx_shift).makeCoeffVector(coeffVec[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
+                if (BraKet[j].Ncomp() < 2) {comp_idx_shift = BraKet[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                BraKet[j].complex(k + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                // add the contribution for this component to the total coefficient vector for this orbital
+                for (int l = 0; l < coeffVecTemp[j].size(); l++) {
+                    if (coeffVec[j].size() <= l) {
+                        coeffVec[j].push_back(coeffVecTemp[j][l]);
+                    } else {
+                        *coeffVec[j][l] += *coeffVecTemp[j][l];
+                    }
+                }
             }
             // make a map that gives j from indexVec
             int orb_node_ix = 0;
@@ -2368,7 +2376,22 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
         std::vector<int> indexVec;    // serialIx of the nodes
         for (int j = 0; j < N; j++) {
             // make vector with all coef pointers and their indices in the union grid
-            BraKet[j].real().makeCoeffVector(coeffVec[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            // BraKet[j].real().makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            std::vector<std::vector<double *>> coeffVecTemp(N);
+            // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
+            for (int k = 0; k < BraKet[j].Ncomp(); k++) {
+                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
+                if (BraKet[j].Ncomp() < 2) {comp_idx_shift = BraKet[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                BraKet[j].real(k + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                // add the contribution for this component to the total coefficient vector for this orbital
+                for (int l = 0; l < coeffVecTemp[j].size(); l++) {
+                    if (coeffVec[j].size() <= l) {
+                        coeffVec[j].push_back(coeffVecTemp[j][l]);
+                    } else {
+                        *coeffVec[j][l] += *coeffVecTemp[j][l];
+                    }
+                }
+            }
             // make a map that gives j from indexVec
             int orb_node_ix = 0;
             for (int ix : indexVec) {
@@ -2785,7 +2808,22 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
         std::vector<int> indexVec;    // serialIx of the nodes
         for (int j = 0; j < N; j++) {
             // make vector with all coef pointers and their indices in the union grid
-            Bra[j].real().makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            // Bra[j].real().makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            std::vector<std::vector<double *>> coeffVecTemp(N);
+            // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
+            for (int k = 0; k < Bra[j].Ncomp(); k++) {
+                int comp_idx_shift = 0; // In case the components of Bra are not stored starting from 0 in CompC 
+                if (Bra[j].Ncomp() < 2) {comp_idx_shift = Bra[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                Bra[j].real(k + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                // add the contribution for this component to the total coefficient vector for this orbital
+                for (int l = 0; l < coeffVecTemp[j].size(); l++) {
+                    if (coeffVecBra[j].size() <= l) {
+                        coeffVecBra[j].push_back(coeffVecTemp[j][l]);
+                    } else {
+                        *coeffVecBra[j][l] += *coeffVecTemp[j][l];
+                    }
+                }
+            }
             // make a map that gives j from indexVec
             int orb_node_ix = 0;
             for (int ix : indexVec) {
@@ -2795,7 +2833,24 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
             }
         }
         for (int j = 0; j < M; j++) {
-            Ket[j].real().makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            // make vector with all coef pointers and their indices in the union grid
+            // Ket[j].real().makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            // BraKet[j].real().makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+            std::vector<std::vector<double *>> coeffVecTemp(N);
+            // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
+            for (int k = 0; k < Ket[j].Ncomp(); k++) {
+                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
+                if (Ket[j].Ncomp() < 2) {comp_idx_shift = Ket[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                Ket[j].real(k + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                // add the contribution for this component to the total coefficient vector for this orbital
+                for (int l = 0; l < coeffVecTemp[j].size(); l++) {
+                    if (coeffVecKet[j].size() <= l) {
+                        coeffVecKet[j].push_back(coeffVecTemp[j][l]);
+                    } else {
+                        *coeffVecKet[j][l] += *coeffVecTemp[j][l];
+                    }
+                }
+            }
             // make a map that gives j from indexVec
             int orb_node_ix = 0;
             for (int ix : indexVec) {
