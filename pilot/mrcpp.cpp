@@ -434,9 +434,23 @@ int main(int argc, char **argv) {
     std::cout << dotut << '\n';
     std::cout << "tut7" << '\n';
     
-    CompFunctionVector Psi_vector(2);
+    CompFunctionVector Psi_vector;
     Psi_vector.push_back(Psi_alt_1);
-    Psi_vector.push_back(Psi_alt_2);
+    // Psi_vector.push_back(Psi_alt_2);
+
+    CompFunctionVector Phi_vector;
+    Phi_vector.push_back(kramer_1);
+    // Phi_vector.push_back(Psi_alt_2); // Just to have the same size as Psi_vector
+
+    std::cout << "tut8" << '\n';
+    ComplexMatrix overlap = mrcpp::calc_overlap_matrix(Psi_vector, Phi_vector);
+    std::cout << "Overlap matrix: " << '\n';
+    for (int i = 0; i < overlap.rows(); ++i) {
+        for (int j = 0; j < overlap.cols(); ++j) {
+            std::cout << overlap(i,j) << ", " << '\t';
+        }
+        std::cout << '\n';
+    }
 
 
     // mrcpp::CompFunction<3> Psi_tmp1(mra);

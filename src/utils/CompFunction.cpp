@@ -2755,9 +2755,10 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
  *
  */
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &Ket) {
-
+    std::cout << "Calculating overlap matrix..." << std::endl;
     if (Bra[0].iscomplex() or Ket[0].iscomplex()) { return calc_overlap_matrix_cplx(Bra, Ket); }
 
+    std::cout << "Calculating overlap matrix... (real version)" << std::endl;
     mrcpp::mpi::barrier(mrcpp::mpi::comm_wrk); // for consistent timings
 
     MultiResolutionAnalysis<3> *mra = Bra.vecMRA;
@@ -2784,15 +2785,17 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
     refTree.makeCoeffVector(coeffVec_ref, indexVec_ref, parindexVec_ref, scalefac, max_ix, refTree);
     int max_n = indexVec_ref.size();
     max_ix++;
-
+    
     bool serial = mrcpp::mpi::wrk_size == 1; // flag for serial/MPI switch
 
     // only used for serial case:
-    std::vector<std::vector<double *>> coeffVecBra(N);
+    std::vector<std::vector<double *>> coeffVecBra(N); //diabolus ex pointera 
+    // std::vector<std::vector<std::shared_ptr<double>>> coeffVecBra(N);
     std::map<int, std::vector<int>> node2orbVecBra; // for each node index, gives a vector with the indices of the orbitals using this node
     std::vector<std::map<int, int>> orb2nodeBra(N); // for a given orbital and a given node, gives the node index in
                                                     // the orbital given the node index in the reference tree
     std::vector<std::vector<double *>> coeffVecKet(M);
+    // std::vector<std::vector<std::shared_ptr<double>>> coeffVecKet(M);
     std::map<int, std::vector<int>> node2orbVecKet; // for each node index, gives a vector with the indices of the orbitals using this node
     std::vector<std::map<int, int>> orb2nodeKet(M); // for a given orbital and a given node, gives the node index in
                                                     // the orbital given the node index in the reference tree
@@ -2800,6 +2803,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
     mrcpp::BankAccount nodesKet;
     // In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
     if (serial) {
+        std::cout << "compl_overlap_matrix: Serial case: preparing coefficient vectors..." << std::endl;
         // 2) make list of all coefficients, and their reference indices
         // for different orbitals, indexVec will give the same index for the same node in space
         // TODO? : do not copy coefficients, but use directly the pointers
@@ -2807,9 +2811,11 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
         std::vector<int> parindexVec; // serialIx of the parent nodes
         std::vector<int> indexVec;    // serialIx of the nodes
         for (int j = 0; j < N; j++) {
+            std::cout << "compl_overlap_matrix: Bra Orbital " << j + 1 << "/" << N << std::endl;
             // make vector with all coef pointers and their indices in the union grid
             // Bra[j].real().makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
             std::vector<std::vector<double *>> coeffVecTemp(N);
+            // std::vector<std::vector<std::shared_ptr<double>>> coeffVecTemp(N);
             // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
             for (int k = 0; k < Bra[j].Ncomp(); k++) {
                 int comp_idx_shift = 0; // In case the components of Bra are not stored starting from 0 in CompC 
@@ -2818,12 +2824,16 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 // add the contribution for this component to the total coefficient vector for this orbital
                 for (int l = 0; l < coeffVecTemp[j].size(); l++) {
                     if (coeffVecBra[j].size() <= l) {
-                        coeffVecBra[j].push_back(coeffVecTemp[j][l]);
+                        std::cout << "Adding contribution from component " << k << " to Bra orbital " << j << " for node index " << l << " (new node)" << std::endl;
+                        coeffVecBra[j].push_back(new double(*coeffVecTemp[j][l])); //deep copy, hopefully
+                        //TODO: maybe free the coeffVecTemp pointers after this loop to avoid confusion?
                     } else {
+                        std::cout << "Adding contribution from component " << k << " to Bra orbital " << j << " for node index " << l << std::endl;
                         *coeffVecBra[j][l] += *coeffVecTemp[j][l];
                     }
                 }
             }
+            std::cout << "compl_overlap_matrix: Bra Orbital " << j + 1 << "/" << N << " - done preparing coefficient vector." << std::endl;
             // make a map that gives j from indexVec
             int orb_node_ix = 0;
             for (int ix : indexVec) {
@@ -2832,11 +2842,13 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 node2orbVecBra[ix].push_back(j);
             }
         }
+        std::cout << "compl_overlap_matrix: Serial case: preparing coefficient vectors for Ket..." << Ket[0].Ncomp() << std::endl;
         for (int j = 0; j < M; j++) {
             // make vector with all coef pointers and their indices in the union grid
             // Ket[j].real().makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
             // BraKet[j].real().makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
-            std::vector<std::vector<double *>> coeffVecTemp(N);
+            std::vector<std::vector<double *>> coeffVecTemp(M);
+            // std::vector<std::vector<std::shared_ptr<double>>> coeffVecTemp(M);
             // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
             for (int k = 0; k < Ket[j].Ncomp(); k++) {
                 int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
@@ -2845,8 +2857,9 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 // add the contribution for this component to the total coefficient vector for this orbital
                 for (int l = 0; l < coeffVecTemp[j].size(); l++) {
                     if (coeffVecKet[j].size() <= l) {
-                        coeffVecKet[j].push_back(coeffVecTemp[j][l]);
+                        coeffVecKet[j].push_back(new double(*coeffVecTemp[j][l])); //deep copy 
                     } else {
+                        std::cout << "Adding contribution from component " << k << " to Ket orbital " << j << " for node index " << l << " n comp=" << Ket[j].Ncomp()<< std::endl;
                         *coeffVecKet[j][l] += *coeffVecTemp[j][l];
                     }
                 }
@@ -2859,7 +2872,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 node2orbVecKet[ix].push_back(j);
             }
         }
-
+        std::cout << "compl_overlap_matrix: Serial case: done preparing coefficient vectors." << std::endl;
     } else { // MPI case
         // 2) send own nodes to bank, identifying them through the serialIx of refTree
         save_nodes(Bra, refTree, nodesBra);
@@ -2892,18 +2905,22 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 DoubleMatrix coeffBlockBra(csize, node2orbVecBra[node_ix].size());
                 DoubleMatrix coeffBlockKet(csize, node2orbVecKet[node_ix].size());
                 if (parindexVec_ref[n] < 0) shift = 0;
+                std::cout << "Processing node " << n + 1 << "/" << max_n << " with serial index " << node_ix << " and csize " << csize << std::endl;
 
                 for (int j : node2orbVecBra[node_ix]) { // loop over indices of the orbitals using this node
                     int orb_node_ix = orb2nodeBra[j][node_ix];
+                    std::cout << "Bra orbital " << j << " uses this node with orbital node index " << orb_node_ix << std::endl;
                     for (int k = 0; k < csize; k++) coeffBlockBra(k, orbVecBra.size()) = coeffVecBra[j][orb_node_ix][k + shift];
                     orbVecBra.push_back(j);
                 }
+                std::cout << "Node " << n + 1 << "/" << max_n << ": found " << orbVecBra.size() << " Bra orbitals using this node." << std::endl;
                 for (int j : node2orbVecKet[node_ix]) { // loop over indices of the orbitals using this node
                     int orb_node_ix = orb2nodeKet[j][node_ix];
+                    std::cout << "Ket orbital " << j << " uses this node with orbital node index " << orb_node_ix << std::endl;
                     for (int k = 0; k < csize; k++) coeffBlockKet(k, orbVecKet.size()) = coeffVecKet[j][orb_node_ix][k + shift];
                     orbVecKet.push_back(j);
                 }
-
+                std::cout << "Node " << n + 1 << "/" << max_n << ": found " << orbVecBra.size() << " Bra orbitals and " << orbVecKet.size() << " Ket orbitals using this node." << std::endl;
                 if (orbVecBra.size() > 0 and orbVecKet.size() > 0) {
                     DoubleMatrix S_temp(orbVecBra.size(), orbVecKet.size());
                     S_temp.noalias() = coeffBlockBra.transpose() * coeffBlockKet;
