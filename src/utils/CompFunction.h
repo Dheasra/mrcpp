@@ -31,7 +31,7 @@ template <int D> struct CompFunctionData {
     int n2[4]{0, 0, 0, 0};
     int n3[4]{0, 0, 0, 0};
     int n4[4]{0, 0, 0, 0};
-    // multiplicative scalar for the function. So far only actively used to take care of imag factor in momentum operator.
+    // multiplicative scalar for the function. 
     ComplexDouble c1[4]{{1.0, 0.0}, {1.0, 0.0}, {1.0, 0.0}, {1.0, 0.0}};
     double d1[4]{0.0, 0.0, 0.0, 0.0};
     double d2[4]{0.0, 0.0, 0.0, 0.0};
@@ -217,7 +217,6 @@ CompFunctionVector multiply(CompFunctionVector &Phi, RepresentableFunction<3> &f
 void SetdefaultMRA(MultiResolutionAnalysis<3> *MRA);
 ComplexVector dot(CompFunctionVector &Bra, CompFunctionVector &Ket);
 ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi);
-ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVector &Phi_bottom); //what is this
 
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet);
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &Ket);

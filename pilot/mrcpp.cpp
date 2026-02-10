@@ -412,7 +412,8 @@ int main(int argc, char **argv) {
     ComplexDouble dotesta = dot(kramer_1, kramer_1);
     // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
     std::cout << dotesta << '\n';
-    std::cout << "tut5" << '\n';
+    std::cout << "tut5 " << Psi_alt_1.data().c1 << '\n';
+    std::cout << "tutS " << kramer_1.data().c1 << '\n';
     std::cout<< "psi_1 = " << &Psi_alt_1.CompC[0] << '\t' << &Psi_alt_1.CompC[1] << std::endl;
     std::cout<< "kramer_1 = " << &kramer_1.CompC[0] << '\t' << &kramer_1.CompC[1] << std::endl;
     ComplexDouble dotut1 = dot(Psi_alt_1, kramer_1);
@@ -439,6 +440,7 @@ int main(int argc, char **argv) {
     // Psi_vector.push_back(Psi_alt_2);
 
     CompFunctionVector Phi_vector;
+    // Phi_vector.push_back(Psi_alt_1);
     Phi_vector.push_back(kramer_1);
     // Phi_vector.push_back(Psi_alt_2); // Just to have the same size as Psi_vector
 
