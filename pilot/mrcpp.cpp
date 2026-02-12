@@ -420,11 +420,11 @@ int main(int argc, char **argv) {
     std::cout << dotut1 << '\n';
     std::cout << "tut6" << '\n';
     CompFunction<3> Psi_alt_2(mra, 2);
-    // project(Psi_alt_2, zero, building_precision, 0);
+    project(Psi_alt_2, zero, building_precision, 0);
     // CompFunction<3> Psi_alt_2(Psi_alt_1); // Copy constructor
     std::cout << "tut6bis " << Psi_alt_2.isreal() << '\n';
     // normalize_spinor(Psi_alt_2, building_precision);
-    apply_Pauli(Psi_alt_2, Psi_alt_1, 1, building_precision, false); // Apply the y Pauli operator to the first component of Psi_1
+    apply_Pauli(Psi_alt_2, Psi_alt_1, 2, building_precision, false); // Apply the nth Pauli operator to the first component of Psi_1
     // kramer_1 = copy(Psi_1);
     ComplexDouble dotestb = dot(Psi_alt_2, Psi_alt_2);
     std::cout << dotestb << " " << kramer_1.isreal() << '\n';
@@ -436,12 +436,12 @@ int main(int argc, char **argv) {
     std::cout << "tut7" << '\n';
     
     CompFunctionVector Psi_vector;
-    Psi_vector.push_back(Psi_alt_1);
+    Psi_vector.push_back(Psi_alt_2);
     // Psi_vector.push_back(Psi_alt_2);
 
     CompFunctionVector Phi_vector;
-    // Phi_vector.push_back(Psi_alt_1);
     Phi_vector.push_back(kramer_1);
+    // Phi_vector.push_back(kramer_1);
     // Phi_vector.push_back(Psi_alt_2); // Just to have the same size as Psi_vector
 
     std::cout << "tut8" << '\n';

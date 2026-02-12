@@ -26,36 +26,33 @@ namespace mrcpp {
         ComplexDouble comp_i(0.0, 1.0); // Define the imaginary unit
         switch (pauli) {
         case 0:
+            //Identity, base case, nothing to apply
+            break;
+        case 1:
             // Apply Pauli-X matrix
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                // out.setReal(inp.CompD[i+1], i); //WARNING: No copy might create some issues down the line
-                // out.setCplx(inp.CompC[i+1], i); //WARNING: No copy might create some issues down the line
-                // // out.CompC[i] = inp.CompC[i+1]; //WARNING: No copy might create some issues down the line
-                // // out.CompC[i+1] = inp.CompC[i];
-                // out.setReal(inp.CompD[i], i+1); //WARNING: No copy might create some issues down the line
-                // out.setCplx(inp.CompC[i], i+1); //WARNING: No copy might create some issues down the line
                 if (inp.isreal() == 1) {
                     out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
                     // Warning: shallow copy
-                    out.CompD[i] = inp.CompD[i+1];
-                    out.CompD[i+1] = inp.CompD[i];
-                    // out.setReal(inp.CompD[i+1], i);
-                    // out.setReal(inp.CompD[i], i+1);
+                    // out.CompD[i] = inp.CompD[i+1];
+                    // out.CompD[i+1] = inp.CompD[i];
+                    out.setReal(inp.CompD[i+1], i);
+                    out.setReal(inp.CompD[i], i+1);
 
                 } else {
                     out.defcomplex(); // Safety catch for later operations on out. If the input is complex, the output should also be defined as complex
                     // Warning: shallow copy
-                    out.CompC[i] = inp.CompC[i+1];
-                    out.CompC[i+1] = inp.CompC[i];
-                    // out.setCplx(inp.CompC[i+1], i);
-                    // out.setCplx(inp.CompC[i], i+1);
+                    // out.CompC[i] = inp.CompC[i+1];
+                    // out.CompC[i+1] = inp.CompC[i];
+                    out.setCplx(inp.CompC[i+1], i);
+                    out.setCplx(inp.CompC[i], i+1);
                 }
                 // coefficient multiplication needn't be done separately for real and complex cases, since the coefficient is purely imaginary, so it will just be multiplied to the complex part of the function, even if the function is defined as real. However, we need to make sure that the output function is defined as complex in this case, otherwise we might run into issues later on when trying to multiply it by a complex coefficient. 
-                out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i+1];
-                out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i];
+                out.func_ptr->data.c1[i] = inp.func_ptr->data.c1[i+1];
+                out.func_ptr->data.c1[i+1] = inp.func_ptr->data.c1[i];
             }
             break;
-        case 1:
+        case 2:
             // Apply Pauli-Y matrix
             // std::cout << "apply Pauli Y tut0 " << out.Ncomp() << " " << inp.Ncomp() << '\n';
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
@@ -77,17 +74,13 @@ namespace mrcpp {
                     // out.CompC[i+1] = inp.CompC[i];
                 }
                 // coefficient multiplication needn't be done separately for real and complex cases, since the coefficient is purely imaginary, so it will just be multiplied to the complex part of the function, even if the function is defined as real. However, we need to make sure that the output function is defined as complex in this case, otherwise we might run into issues later on when trying to multiply it by a complex coefficient.
-                out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i+1] * (-1.0)*comp_i;
-                out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i] * comp_i;
+                out.func_ptr->data.c1[i] = inp.func_ptr->data.c1[i+1] * (-1.0)*comp_i;
+                out.func_ptr->data.c1[i+1] = inp.func_ptr->data.c1[i] * comp_i;
             }
             break;
-        case 2:
+        case 3:
             // Apply Pauli-Z matrix
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                // // out.CompC[i]->multiply(-1.0i, inp.CompC[i+1]); //WARNING: No copy might create some issues down the line
-                // out.setReal(inp.CompD[i], i); //WARNING: No copy might create some issues down the line
-                // out.setCplx(inp.CompC[i], i); //WARNING: No copy might create some issues down the line
-                // // out.CompC[i] = inp.CompC[i]; //WARNING: No copy might create some issues down the line
                 if (inp.isreal() == 1) {
                     out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
                     // Warning: shallow copy
@@ -104,10 +97,10 @@ namespace mrcpp {
                     // out.CompC[i] = inp.CompC[i+1]; 
                     // out.CompC[i+1] = inp.CompC[i];
                 }
-                out.func_ptr->data.c1[i] *= inp.func_ptr->data.c1[i];
+                out.func_ptr->data.c1[i] = inp.func_ptr->data.c1[i];
                 // out.CompC[i+1] = inp.CompC[i+1]; 
                 // out.CompC[i+1]->rescale(-1.0);
-                out.func_ptr->data.c1[i+1] *= inp.func_ptr->data.c1[i+1] * (-1.0);
+                out.func_ptr->data.c1[i+1] = inp.func_ptr->data.c1[i+1] * (-1.0);
                 // out.func_ptr->data.c1[i+1] *= -1.0;
             }
             break;
