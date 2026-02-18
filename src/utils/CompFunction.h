@@ -33,6 +33,7 @@ template <int D> struct CompFunctionData {
     int n4[4]{0, 0, 0, 0};
     // multiplicative scalar for the function. 
     ComplexDouble c1[4]{{1.0, 0.0}, {1.0, 0.0}, {1.0, 0.0}, {1.0, 0.0}};
+    // data to contain occupancy numbers, for example.
     double d1[4]{0.0, 0.0, 0.0, 0.0};
     double d2[4]{0.0, 0.0, 0.0, 0.0};
     double d3[4]{0.0, 0.0, 0.0, 0.0};

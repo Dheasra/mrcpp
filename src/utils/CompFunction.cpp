@@ -41,9 +41,6 @@ template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra, 
     func_ptr->data.Ncomp = nComponents;
     for (int i = 0; i < 4; i++) CompD[i] = nullptr;
     for (int i = 0; i < 4; i++) CompC[i] = nullptr;
-    // std::cout << "tutCompF" << func_ptr->data.Ncomp << std::endl; // Debugging line to check the address of CompC
-    // std::cout << "initializing CompFunction " << CompC.size()<< std::endl; 
-    // CompFunction tut(mra);
 }
 
 template <int D> CompFunction<D>::CompFunction() {
@@ -64,8 +61,8 @@ template <int D> CompFunction<D>::CompFunction(int n1, int nComponents) {
     CompC = func_ptr->cplx;
     for (int i = 0; i < 4; i++) CompD[i] = nullptr;
     for (int i = 0; i < 4; i++) CompC[i] = nullptr;
-    func_ptr->data.n1[0] = n1;
-    func_ptr->data.n2[0] = -1;
+    func_ptr->data.n1[0] = n1; // for orbitals: spin 
+    func_ptr->data.n2[0] = -1; 
     func_ptr->data.n3[0] = 0;
     func_ptr->rank = 0;
     func_ptr->isreal = 1;
@@ -2814,7 +2811,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
     mrcpp::BankAccount nodesKet;
     // In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
     for (int l = 0; l < Bra[0].Ncomp(); l++) {
-        std::cout << "compl_overlap_matrix: Serial case: preparing coefficient vectors..." << std::endl;
+        // std::cout << "compl_overlap_matrix: Serial case: preparing coefficient vectors..." << std::endl;
         ComplexMatrix S = ComplexMatrix::Zero(N, M); // contribution to Stot from component k
         if (serial) {
             // 2) make list of all coefficients, and their reference indices
@@ -2966,9 +2963,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 for (int i = 0; i < N; i++) {
                     for (int j = 0; j < M; j++) { 
                         S(i, j) += S_omp(i, j); 
-                        std::cout << S(i,j) << ", ";
                     }
-                    std::cout << std::endl;
                 }
             }
         }
@@ -2978,7 +2973,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
 
         mrcpp::mpi::allreduce_matrix(S, mrcpp::mpi::comm_wrk);
 
-        std::cout << "tut" << std::endl;
+        // std::cout << "tut" << std::endl;
         // multiply by CompFunction multiplicative factor
         // for (int k = 0; k < Bra[0].Ncomp(); k++) {
         ComplexVector FacBra = ComplexVector::Zero(N);
@@ -2996,7 +2991,8 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < M; j++) { 
                 S(i, j) *= std::conj(FacBra[i]) * FacKet[j]; 
-                std::cout << "After multiplying by factors: S(" << i << "," << j << ") = " << S(i,j) << std::endl;}
+                // std::cout << "After multiplying by factors: S(" << i << "," << j << ") = " << S(i,j) << std::endl;
+            }
         }
         Stot += S; // accumulate contribution from this component
     }

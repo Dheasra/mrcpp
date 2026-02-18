@@ -26,7 +26,10 @@ namespace mrcpp {
         ComplexDouble comp_i(0.0, 1.0); // Define the imaginary unit
         switch (pauli) {
         case 0:
-            //Identity, base case, nothing to apply
+            //Identity, base case, nothing to apply, just copy the input to the output if they are not the same function
+            if (&out != &inp) {
+                out = inp;
+            }
             break;
         case 1:
             // Apply Pauli-X matrix
