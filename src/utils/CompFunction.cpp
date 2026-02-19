@@ -1483,7 +1483,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
         std::vector<double> scalefac;
         for (int j = 0; j < N; j++) {
             // make vector with all coef pointers and their indices in the union grid
-            Phi[j].real().makeCoeffVector(coeffVec[j], indexVec[j], parindexVec, scalefac, max_ix, refTree);
+            Phi[j].real().makeCoeffVector(coeffVec[j], indexVec[j], parindexVec, scalefac, max_ix, refTree); //adapt, similar to calc_overlap_matrix
             // make a map that gives j from indexVec
             int orb_node_ix = 0;
             for (int ix : indexVec[j]) {
@@ -2194,16 +2194,17 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
     refTree.makeCoeffVector(coeffVec_ref, indexVec_ref, parindexVec_ref, scalefac, max_ix, refTree);
     int max_n = indexVec_ref.size();
 
-    // only used for serial case:
-    std::vector<std::vector<ComplexDouble *>> coeffVec(N);
-    std::map<int, std::vector<int>> node2orbVec; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2node(N); // for a given orbital and a given node, gives the node index in
-                                                 // the orbital given the node index in the reference tree
-
+    
     bool serial = mrcpp::mpi::wrk_size == 1; // flag for serial/MPI switch
-    mrcpp::BankAccount nodesBraKet;
-
+    
     for (int l = 0; l < BraKet[0].Ncomp(); l++) {
+        // only used for serial case:
+        std::vector<std::vector<ComplexDouble *>> coeffVec(N);
+        std::map<int, std::vector<int>> node2orbVec; // for each node index, gives a vector with the indices of the orbitals using this node
+        std::vector<std::map<int, int>> orb2node(N); // for a given orbital and a given node, gives the node index in
+                                                    // the orbital given the node index in the reference tree
+                                                    
+        mrcpp::BankAccount nodesBraKet;
         ComplexMatrix S = ComplexMatrix::Zero(N, N); // Overlap matrix for this specific component, to be accumulated into Stot
         // In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
         if (serial) {
@@ -2216,7 +2217,7 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
                 std::vector<std::vector<ComplexDouble *>> coeffVecTemp(N);
                 // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
                 int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
-                if (BraKet[j].Ncomp() < 2) {comp_idx_shift = BraKet[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                if ((BraKet[j].Ncomp() < 2) && (std::abs(BraKet[j].func_ptr->data.d1[1]-1.0) < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
                 BraKet[j].complex(l + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // add the contribution for this component to the total coefficient vector for this orbital
                 for (int l = 0; l < coeffVecTemp[j].size(); l++) {
@@ -2359,16 +2360,17 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
     refTree.makeCoeffVector(coeffVec_ref, indexVec_ref, parindexVec_ref, scalefac, max_ix, refTree);
     int max_n = indexVec_ref.size();
 
-    // only used for serial case:
-    std::vector<std::vector<double *>> coeffVec(N);
-    std::map<int, std::vector<int>> node2orbVec; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2node(N); // for a given orbital and a given node, gives the node index in
-                                                 // the orbital given the node index in the reference tree
-
+    
     bool serial = mrcpp::mpi::wrk_size == 1; // flag for serial/MPI switch
-    mrcpp::BankAccount nodesBraKet;
     
     for (int l = 0; l < BraKet[0].Ncomp(); l++) {
+        // only used for serial case:
+        std::vector<std::vector<double *>> coeffVec(N);
+        std::map<int, std::vector<int>> node2orbVec; // for each node index, gives a vector with the indices of the orbitals using this node
+        std::vector<std::map<int, int>> orb2node(N); // for a given orbital and a given node, gives the node index in
+                                                    // the orbital given the node index in the reference tree
+        mrcpp::BankAccount nodesBraKet;
+
         ComplexMatrix S = ComplexMatrix::Zero(N, N);
         // In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
         if (serial) {
@@ -2381,7 +2383,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
                 // BraKet[j].real().makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 std::vector<std::vector<double *>> coeffVecTemp(N);
                 int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
-                if (BraKet[j].Ncomp() < 2) {comp_idx_shift = BraKet[j].func_ptr->data.n1[1];} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                if ((BraKet[j].Ncomp() < 2) && (std::abs(BraKet[j].func_ptr->data.d1[1]-1.0) < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
                 BraKet[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // add the contribution for this component to the total coefficient vector for this orbital
                 for (int l = 0; l < coeffVecTemp[j].size(); l++) {
@@ -2559,19 +2561,19 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
 
     bool serial = mrcpp::mpi::wrk_size == 1; // flag for serial/MPI switch
 
-    // only used for serial case:
-    std::vector<std::vector<ComplexDouble *>> coeffVecBra(N);
-    std::map<int, std::vector<int>> node2orbVecBra; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2nodeBra(N); // for a given orbital and a given node, gives the node index in
-                                                    // the orbital given the node index in the reference tree
-    std::vector<std::vector<ComplexDouble *>> coeffVecKet(M);
-    std::map<int, std::vector<int>> node2orbVecKet; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2nodeKet(M); // for a given orbital and a given node, gives the node index in
-                                                    // the orbital given the node index in the reference tree
-    mrcpp::BankAccount nodesBra;
-    mrcpp::BankAccount nodesKet;
-
+    
     for (int l = 0; l < Bra[0].Ncomp(); l++) {
+        // only used for serial case:
+        std::vector<std::vector<ComplexDouble *>> coeffVecBra(N);
+        std::map<int, std::vector<int>> node2orbVecBra; // for each node index, gives a vector with the indices of the orbitals using this node
+        std::vector<std::map<int, int>> orb2nodeBra(N); // for a given orbital and a given node, gives the node index in
+                                                        // the orbital given the node index in the reference tree
+        std::vector<std::vector<ComplexDouble *>> coeffVecKet(M);
+        std::map<int, std::vector<int>> node2orbVecKet; // for each node index, gives a vector with the indices of the orbitals using this node
+        std::vector<std::map<int, int>> orb2nodeKet(M); // for a given orbital and a given node, gives the node index in
+                                                        // the orbital given the node index in the reference tree
+        mrcpp::BankAccount nodesBra;
+        mrcpp::BankAccount nodesKet;
         ComplexMatrix S = ComplexMatrix::Zero(N, M);
         // In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
         if (serial) {
@@ -2583,7 +2585,7 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
             std::vector<int> indexVec;    // serialIx of the nodes
             for (int j = 0; j < N; j++) {
                 int comp_idx_shift = 0; // In case the components of Bra are not stored starting from 0 in CompC 
-                if ((Bra[j].Ncomp() == 2)&& (Bra[j].func_ptr->data.d1[1]-1.0 < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                if ((Bra[j].Ncomp() < 2) && (std::abs(Bra[j].func_ptr->data.d1[1]-1.0) < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
                 // make vector with all coef pointers and their indices in the union grid
                 Bra[j].complex(l + comp_idx_shift).makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // make a map that gives j from indexVec
@@ -2596,7 +2598,7 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
             }
             for (int j = 0; j < M; j++) {
                 int comp_idx_shift = 0; // In case the components of Bra are not stored starting from 0 in CompC 
-                if ((Bra[j].Ncomp() == 2)&& (Bra[j].func_ptr->data.d1[1]-1.0 < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                if ((Ket[j].Ncomp() < 2) && (std::abs(Ket[j].func_ptr->data.d1[1]-1.0) < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
                 Ket[j].complex(l + comp_idx_shift).makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // make a map that gives j from indexVec
                 int orb_node_ix = 0;
@@ -2796,21 +2798,19 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
     
     bool serial = mrcpp::mpi::wrk_size == 1; // flag for serial/MPI switch
 
-    // only used for serial case:
-    std::vector<std::vector<double *>> coeffVecBra(N); //diabolus ex pointera 
-    // std::vector<std::vector<std::shared_ptr<double>>> coeffVecBra(N);
-    std::map<int, std::vector<int>> node2orbVecBra; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2nodeBra(N); // for a given orbital and a given node, gives the node index in
-                                                    // the orbital given the node index in the reference tree
-    std::vector<std::vector<double *>> coeffVecKet(M);
-    // std::vector<std::vector<std::shared_ptr<double>>> coeffVecKet(M);
-    std::map<int, std::vector<int>> node2orbVecKet; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2nodeKet(M); // for a given orbital and a given node, gives the node index in
-                                                    // the orbital given the node index in the reference tree
-    mrcpp::BankAccount nodesBra;
-    mrcpp::BankAccount nodesKet;
     // In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
     for (int l = 0; l < Bra[0].Ncomp(); l++) {
+        // only used for serial case:
+        std::vector<std::vector<double *>> coeffVecBra(N); //diabolus ex pointera 
+        std::map<int, std::vector<int>> node2orbVecBra; // for each node index, gives a vector with the indices of the orbitals using this node
+        std::vector<std::map<int, int>> orb2nodeBra(N); // for a given orbital and a given node, gives the node index in
+                                                        // the orbital given the node index in the reference tree
+        std::vector<std::vector<double *>> coeffVecKet(M);
+        std::map<int, std::vector<int>> node2orbVecKet; // for each node index, gives a vector with the indices of the orbitals using this node
+        std::vector<std::map<int, int>> orb2nodeKet(M); // for a given orbital and a given node, gives the node index in
+                                                        // the orbital given the node index in the reference tree
+        mrcpp::BankAccount nodesBra;
+        mrcpp::BankAccount nodesKet;
         // std::cout << "compl_overlap_matrix: Serial case: preparing coefficient vectors..." << std::endl;
         ComplexMatrix S = ComplexMatrix::Zero(N, M); // contribution to Stot from component k
         if (serial) {
@@ -2827,9 +2827,10 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 // std::vector<std::vector<double *>> coeffVecTemp(N);
                 // std::vector<std::vector<std::shared_ptr<double>>> coeffVecTemp(N);
                 // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
-                int comp_idx_shift = 0; // In case the components of Bra are not stored starting from 0 in CompC 
-                if ((Bra[j].Ncomp() == 2)&& (Bra[j].func_ptr->data.d1[1]-1.0 < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
-                Bra[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                // int comp_idx_shift = 0; // In case the components of Bra are not stored starting from 0 in CompC 
+                // if ((Bra[j].Ncomp() < 2) and (std::abs(Bra[j].func_ptr->data.d1[1]-1.0)< 1e-14)) {comp_idx_shift = 0;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                // Bra[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                Bra[j].real(l).makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // std::cout << "compl_overlap_matrix: Bra Orbital " << j + 1 << "/" << N << " - done preparing coefficient vector." << std::endl;
                 // make a map that gives j from indexVec
                 int orb_node_ix = 0;
@@ -2847,9 +2848,10 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 // std::vector<std::vector<double *>> coeffVecTemp(M);
                 // std::vector<std::vector<std::shared_ptr<double>>> coeffVecTemp(M);
                 // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
-                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
-                if ((Ket[j].Ncomp() == 2) && (Ket[j].func_ptr->data.d1[1] -1.0 < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
-                Ket[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                // int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
+                // if ((Ket[j].Ncomp()== 2) && (std::abs(Ket[j].func_ptr->data.d1[1] -1.0)< 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
+                // Ket[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                Ket[j].real(l).makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // for (int k = 0; k < Ket[j].Ncomp(); k++) {
                 //     // add the contribution for this component to the total coefficient vector for this orbital
                 //     // for (int l = 0; l < coeffVecTemp[j].size(); l++) {
