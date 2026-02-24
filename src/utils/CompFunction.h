@@ -137,7 +137,7 @@ public:
     double norm() const;
     double getSquareNorm() const;
     void alloc(int nalloc = 1, bool zero = true);
-    void alloc_comp(int i = 0); // allocate one specific component
+    void alloc_comp(int i = 0, bool zero = true); // allocate one specific component
     void setReal(FunctionTree<D, double> *tree, int i = 0);
     void setCplx(FunctionTree<D, ComplexDouble> *tree, int i = 0);
     void setRank(int i) { func_ptr->rank = i; };
@@ -215,14 +215,18 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec = -1.0)
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec = -1.0);
 void save_nodes(CompFunctionVector &Phi, mrcpp::FunctionTree<3, double> &refTree, BankAccount &account, int sizes = -1);
 CompFunctionVector multiply(CompFunctionVector &Phi, RepresentableFunction<3> &f, double prec = -1.0, CompFunction<3> *Func = nullptr, int nrefine = 1, bool all = false);
+CompFunctionVector multiply_one_comp(CompFunctionVector &Phi, RepresentableFunction<3> &f, double prec, CompFunction<3> *Func, int nrefine=0, bool all = false, int comp=0);
+
 void SetdefaultMRA(MultiResolutionAnalysis<3> *MRA);
 ComplexVector dot(CompFunctionVector &Bra, CompFunctionVector &Ket);
 ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi);
+
 
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet);
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &Ket);
 void orthogonalize(double prec, CompFunctionVector &Bra, CompFunctionVector &Ket);
 
 void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec = -1.0);
+
 
 } // namespace mrcpp
