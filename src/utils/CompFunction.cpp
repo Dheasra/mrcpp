@@ -1159,268 +1159,272 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
     if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
     if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
 
-    // 1) make union tree without coefficients. Note that the ref tree is always real (in fact it has no coeff)
-    FunctionTree<3> refTree(*Phi.vecMRA);
-    mpi::allreduce_Tree_noCoeff(refTree, Phi, mpi::comm_wrk);
+    for (int q = 0; q < Phi[0].Ncomp(); q++) {    
+        // 1) make union tree without coefficients. Note that the ref tree is always real (in fact it has no coeff)
+        FunctionTree<3> refTree(*Phi.vecMRA);
+        mpi::allreduce_Tree_noCoeff(refTree, Phi, mpi::comm_wrk);
 
-    int sizecoeff = (1 << refTree.getDim()) * refTree.getKp1_d();
-    int sizecoeffW = ((1 << refTree.getDim()) - 1) * refTree.getKp1_d();
-    std::vector<double> scalefac_ref;
-    std::vector<double *> coeffVec_ref; // not used!
-    std::vector<int> indexVec_ref;      // serialIx of the nodes
-    std::vector<int> parindexVec_ref;   // serialIx of the parent nodes
-    int max_ix;
-    // get a list of all nodes in union tree, identified by their serialIx indices
-    refTree.makeCoeffVector(coeffVec_ref, indexVec_ref, parindexVec_ref, scalefac_ref, max_ix, refTree);
-    int max_n = indexVec_ref.size();
+        int sizecoeff = (1 << refTree.getDim()) * refTree.getKp1_d();
+        int sizecoeffW = ((1 << refTree.getDim()) - 1) * refTree.getKp1_d();
+        std::vector<double> scalefac_ref;
+        std::vector<double *> coeffVec_ref; // not used!
+        std::vector<int> indexVec_ref;      // serialIx of the nodes
+        std::vector<int> parindexVec_ref;   // serialIx of the parent nodes
+        int max_ix;
+        // get a list of all nodes in union tree, identified by their serialIx indices
+        refTree.makeCoeffVector(coeffVec_ref, indexVec_ref, parindexVec_ref, scalefac_ref, max_ix, refTree);
+        int max_n = indexVec_ref.size();
 
-    for (int j = 0; j < N; j++) {
-        if (!mpi::my_func(j)) continue;
-        if (Phi[j].isreal()) MSG_ABORT("This function only use complex input");
-    }
-
-    for (int i = 0; i < M; i++) {
-        Psi[i].func_ptr->data.isreal = 0;
-        Psi[i].func_ptr->data.iscomplex = 1;
-    }
-
-    // 3) In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
-
-    BankAccount nodesPhi;     // to put the original nodes
-    BankAccount nodesRotated; // to put the rotated nodes
-
-    // used for serial only:
-    std::vector<std::vector<ComplexDouble *>> coeffVec(N);
-    std::vector<std::vector<int>> indexVec(N);   // serialIx of the nodes
-    std::map<int, std::vector<int>> node2orbVec; // for each node index, gives a vector with the indices of the orbitals using this node
-    std::vector<std::map<int, int>> orb2node(N); // for a given orbital and a given node, gives the node index in the
-                                                 // orbital given the node index in the reference tree
-    if (serial) {
-        // make list of all coefficients (coeffVec), and their reference indices (indexVec)
-        std::vector<int> parindexVec; // serialIx of the parent nodes
-        std::vector<double> scalefac;
         for (int j = 0; j < N; j++) {
-            // make vector with all coef pointers and their indices in the union grid
-            Phi[j].complex().makeCoeffVector(coeffVec[j], indexVec[j], parindexVec, scalefac, max_ix, refTree);
-            // make a map that gives j from indexVec
-            int orb_node_ix = 0;
-            for (int ix : indexVec[j]) {
-                orb2node[j][ix] = orb_node_ix++;
-                if (ix < 0) continue;
-                node2orbVec[ix].push_back(j);
-            }
+            if (!mpi::my_func(j)) continue;
+            if (Phi[j].isreal()) MSG_ABORT("This function only use complex input");
         }
-    } else { // MPI case
-        // send own nodes to bank, identifying them through the serialIx of refTree
-        save_nodes(Phi, refTree, nodesPhi);
-        mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
-    }
 
-    // 4) rotate all the nodes
-    IntMatrix split_serial;                                 // in the serial case all split are stored in one array
-    std::vector<std::vector<ComplexDouble *>> coeffpVec(M); // to put pointers to the rotated coefficient for each orbital in serial case
-    std::vector<std::map<int, int>> ix2coef(M);             // to find the index in for example rotCoeffVec[] corresponding to a serialIx
-    int csize;                                              // size of the current coefficients (different for roots and branches)
-    std::vector<ComplexMatrix> rotatedCoeffVec;             // just to ensure that the data from rotatedCoeff is not deleted, since we point to it.
-                                                            // j indices are for unrotated orbitals, i indices are for rotated orbitals
-    if (serial) {
-        std::map<int, int> ix2coef_ref; // to find the index n corresponding to a serialIx
-        split_serial.resize(M, max_n);  // not use in the MPI case
-        for (int n = 0; n < max_n; n++) {
-            int node_ix = indexVec_ref[n]; // SerialIx for this node in the reference tree
-            ix2coef_ref[node_ix] = n;
-            for (int i = 0; i < M; i++) split_serial(i, n) = 1;
+        for (int i = 0; i < M; i++) {
+            Psi[i].func_ptr->data.isreal = 0;
+            Psi[i].func_ptr->data.iscomplex = 1;
         }
-        std::vector<int> nodeReady(max_n, 0); // To indicate to OMP threads that the parent is ready (for splits)
-                                              // assumes the nodes are ordered such that parent are treated before children. BFS or DFS ok.
-                                              // NB: the n must be traversed approximately in right order: Thread n may have to wait until som other preceding
-                                              // n is finished.
-#pragma omp parallel for schedule(dynamic)
-        for (int n = 0; n < max_n; n++) {
-            int csize;
-            int node_ix = indexVec_ref[n]; // SerialIx for this node in the reference tree
-            // 4a) make a dense contiguous matrix with the coefficient from all the orbitals using node n
-            std::vector<int> orbjVec; // to remember which orbital correspond to each orbVec.size();
-            if (node2orbVec[node_ix].size() <= 0) continue;
-            csize = sizecoeffW;
-            if (parindexVec_ref[n] < 0) csize = sizecoeff; // for root nodes we include scaling coeff
 
-            int shift = sizecoeff - sizecoeffW; // to copy only wavelet part
-            if (parindexVec_ref[n] < 0) shift = 0;
-            ComplexMatrix coeffBlock(csize, node2orbVec[node_ix].size());
-            for (int j : node2orbVec[node_ix]) { // loop over indices of the orbitals using this node
-                int orb_node_ix = orb2node[j][node_ix];
-                for (int k = 0; k < csize; k++) coeffBlock(k, orbjVec.size()) = coeffVec[j][orb_node_ix][k + shift];
-                orbjVec.push_back(j);
-            }
+        // 3) In the serial case we store the coeff pointers in coeffVec. In the mpi case the coeff are stored in the bank
 
-            // 4b) make a list of rotated orbitals needed for this node
-            // OMP must wait until parent is ready
-            while (parindexVec_ref[n] >= 0 and nodeReady[ix2coef_ref[parindexVec_ref[n]]] == 0) {
-#pragma omp flush
-            };
+        BankAccount nodesPhi;     // to put the original nodes
+        BankAccount nodesRotated; // to put the rotated nodes
 
-            std::vector<int> orbiVec;
-            for (int i = 0; i < M; i++) {                                                                        // loop over all rotated orbitals
-                if (parindexVec_ref[n] >= 0 and split_serial(i, ix2coef_ref[parindexVec_ref[n]]) == 0) continue; // parent node has too small wavelets
-                orbiVec.push_back(i);
-            }
-
-            // 4c) rotate this node
-            ComplexMatrix Un(orbjVec.size(), orbiVec.size()); // chunk of U, with reorganized indices
-            for (int i = 0; i < orbiVec.size(); i++) {        // loop over rotated orbitals
-                for (int j = 0; j < orbjVec.size(); j++) { Un(j, i) = U(orbjVec[j], orbiVec[i]); }
-            }
-            ComplexMatrix rotatedCoeff(csize, orbiVec.size());
-            // HERE IT HAPPENS!
-            // TODO: conjugaison
-            rotatedCoeff.noalias() = coeffBlock * Un; // Matrix mutiplication
-
-            // 4d) store and make rotated node pointers
-            // for now we allocate in buffer, in future could be directly allocated in the final trees
-            double thres = prec * prec * scalefac_ref[n] * scalefac_ref[n];
-            // make all norms:
-            for (int i = 0; i < orbiVec.size(); i++) {
-                // check if parent must be split
-                if (parindexVec_ref[n] == -1 or split_serial(orbiVec[i], ix2coef_ref[parindexVec_ref[n]])) {
-                    // mark this node for this orbital for later split
-#pragma omp critical
-                    {
-                        ix2coef[orbiVec[i]][node_ix] = coeffpVec[orbiVec[i]].size();
-                        coeffpVec[orbiVec[i]].push_back(&(rotatedCoeff(0, i))); // list of coefficient pointers
-                    }
-                    // check norms for split
-                    double wnorm = 0.0; // rotatedCoeff(k, i) is already in cache here
-                    int kstart = 0;
-                    if (parindexVec_ref[n] < 0) kstart = sizecoeff - sizecoeffW; // do not include scaling, even for roots
-                    for (int k = kstart; k < csize; k++) wnorm += std::real(rotatedCoeff(k, i) * std::conj(rotatedCoeff(k, i)));
-                    if (thres < wnorm or prec < 0)
-                        split_serial(orbiVec[i], n) = 1;
-                    else
-                        split_serial(orbiVec[i], n) = 0;
-                } else {
-                    ix2coef[orbiVec[i]][node_ix] = max_n + 1; // should not be used
-                    split_serial(orbiVec[i], n) = 0;          // do not split if parent does not need to be split
+        // used for serial only:
+        std::vector<std::vector<ComplexDouble *>> coeffVec(N);
+        std::vector<std::vector<int>> indexVec(N);   // serialIx of the nodes
+        std::map<int, std::vector<int>> node2orbVec; // for each node index, gives a vector with the indices of the orbitals using this node
+        std::vector<std::map<int, int>> orb2node(N); // for a given orbital and a given node, gives the node index in the
+                                                    // orbital given the node index in the reference tree
+        if (serial) {
+            // make list of all coefficients (coeffVec), and their reference indices (indexVec)
+            std::vector<int> parindexVec; // serialIx of the parent nodes
+            std::vector<double> scalefac;
+            for (int j = 0; j < N; j++) {
+                // make vector with all coef pointers and their indices in the union grid
+                Phi[j].complex(q).makeCoeffVector(coeffVec[j], indexVec[j], parindexVec, scalefac, max_ix, refTree);
+                // make a map that gives j from indexVec
+                int orb_node_ix = 0;
+                for (int ix : indexVec[j]) {
+                    orb2node[j][ix] = orb_node_ix++;
+                    if (ix < 0) continue;
+                    node2orbVec[ix].push_back(j);
                 }
             }
-            nodeReady[n] = 1;
-#pragma omp critical
-            {
-                // this ensures that rotatedCoeff is not deleted, when getting out of scope
-                rotatedCoeffVec.push_back(std::move(rotatedCoeff));
-            }
+        } else { // MPI case
+            // send own nodes to bank, identifying them through the serialIx of refTree
+            save_nodes(Phi, refTree, nodesPhi);
+            mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
         }
-    } else { // MPI case
 
-        // TODO? rotate in bank, so that we do not get and put. Requires clever handling of splits.
-        std::vector<double> split(M, -1.0);    // which orbitals need splitting (at a given node). For now double for compatibilty with bank
-        std::vector<double> needsplit(M, 1.0); // which orbitals need splitting
-        BankAccount nodeSplits;
-        mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
-
-        ComplexMatrix coeffBlock(sizecoeff, N);
-        max_ix++; // largest node index + 1. to store rotated orbitals with different id
-        TaskManager tasks(max_n);
-        for (int nn = 0; nn < max_n; nn++) {
-            int n = tasks.next_task();
-            if (n < 0) break;
-            double thres = prec * prec * scalefac_ref[n] * scalefac_ref[n];
-            // 4a) make list of orbitals that should split the parent node, i.e. include this node
-            int parentid = parindexVec_ref[n];
-            if (parentid == -1) {
-                // root node, split if output needed
-                for (int i = 0; i < M; i++) { split[i] = 1.0; }
-                csize = sizecoeff;
-            } else {
-                // note that it will wait until data is available
-                nodeSplits.get_data(parentid, M, split.data());
+        // 4) rotate all the nodes
+        IntMatrix split_serial;                                 // in the serial case all split are stored in one array
+        std::vector<std::vector<ComplexDouble *>> coeffpVec(M); // to put pointers to the rotated coefficient for each orbital in serial case
+        std::vector<std::map<int, int>> ix2coef(M);             // to find the index in for example rotCoeffVec[] corresponding to a serialIx
+        int csize;                                              // size of the current coefficients (different for roots and branches)
+        std::vector<ComplexMatrix> rotatedCoeffVec;             // just to ensure that the data from rotatedCoeff is not deleted, since we point to it.
+                                                                // j indices are for unrotated orbitals, i indices are for rotated orbitals
+        if (serial) {
+            std::map<int, int> ix2coef_ref; // to find the index n corresponding to a serialIx
+            split_serial.resize(M, max_n);  // not use in the MPI case
+            for (int n = 0; n < max_n; n++) {
+                int node_ix = indexVec_ref[n]; // SerialIx for this node in the reference tree
+                ix2coef_ref[node_ix] = n;
+                for (int i = 0; i < M; i++) split_serial(i, n) = 1;
+            }
+            std::vector<int> nodeReady(max_n, 0); // To indicate to OMP threads that the parent is ready (for splits)
+                                                // assumes the nodes are ordered such that parent are treated before children. BFS or DFS ok.
+                                                // NB: the n must be traversed approximately in right order: Thread n may have to wait until som other preceding
+                                                // n is finished.
+    #pragma omp parallel for schedule(dynamic)
+            for (int n = 0; n < max_n; n++) {
+                int csize;
+                int node_ix = indexVec_ref[n]; // SerialIx for this node in the reference tree
+                // 4a) make a dense contiguous matrix with the coefficient from all the orbitals using node n
+                std::vector<int> orbjVec; // to remember which orbital correspond to each orbVec.size();
+                if (node2orbVec[node_ix].size() <= 0) continue;
                 csize = sizecoeffW;
-            }
-            std::vector<int> orbiVec;
-            std::vector<int> orbjVec;
-            for (int i = 0; i < M; i++) {     // loop over rotated orbitals
-                if (split[i] < 0.0) continue; // parent node has too small wavelets
-                orbiVec.push_back(i);
-            }
+                if (parindexVec_ref[n] < 0) csize = sizecoeff; // for root nodes we include scaling coeff
 
-            // 4b) rotate this node
-            ComplexMatrix coeffBlock(csize, N); // largest possible used size
-            nodesPhi.get_nodeblock(indexVec_ref[n], coeffBlock.data(), orbjVec);
-            coeffBlock.conservativeResize(Eigen::NoChange, orbjVec.size()); // keep only used part
+                int shift = sizecoeff - sizecoeffW; // to copy only wavelet part
+                if (parindexVec_ref[n] < 0) shift = 0;
+                ComplexMatrix coeffBlock(csize, node2orbVec[node_ix].size());
+                for (int j : node2orbVec[node_ix]) { // loop over indices of the orbitals using this node
+                    int orb_node_ix = orb2node[j][node_ix];
+                    for (int k = 0; k < csize; k++) coeffBlock(k, orbjVec.size()) = coeffVec[j][orb_node_ix][k + shift];
+                    orbjVec.push_back(j);
+                }
 
-            // chunk of U, with reorganized indices and separate blocks for real and imag:
-            ComplexMatrix Un(orbjVec.size(), orbiVec.size());
-            ComplexMatrix rotatedCoeff(csize, orbiVec.size());
+                // 4b) make a list of rotated orbitals needed for this node
+                // OMP must wait until parent is ready
+                while (parindexVec_ref[n] >= 0 and nodeReady[ix2coef_ref[parindexVec_ref[n]]] == 0) {
+    #pragma omp flush
+                };
 
-            for (int i = 0; i < orbiVec.size(); i++) {     // loop over included rotated real and imag part of orbitals
-                for (int j = 0; j < orbjVec.size(); j++) { // loop over input orbital, possibly imaginary parts
-                    Un(j, i) = U(orbjVec[j], orbiVec[i]);
+                std::vector<int> orbiVec;
+                for (int i = 0; i < M; i++) {                                                                        // loop over all rotated orbitals
+                    if (parindexVec_ref[n] >= 0 and split_serial(i, ix2coef_ref[parindexVec_ref[n]]) == 0) continue; // parent node has too small wavelets
+                    orbiVec.push_back(i);
+                }
+
+                // 4c) rotate this node
+                ComplexMatrix Un(orbjVec.size(), orbiVec.size()); // chunk of U, with reorganized indices
+                for (int i = 0; i < orbiVec.size(); i++) {        // loop over rotated orbitals
+                    for (int j = 0; j < orbjVec.size(); j++) { Un(j, i) = U(orbjVec[j], orbiVec[i]); }
+                }
+                ComplexMatrix rotatedCoeff(csize, orbiVec.size());
+                // HERE IT HAPPENS!
+                // TODO: conjugaison
+                rotatedCoeff.noalias() = coeffBlock * Un; // Matrix mutiplication
+
+                // 4d) store and make rotated node pointers
+                // for now we allocate in buffer, in future could be directly allocated in the final trees
+                double thres = prec * prec * scalefac_ref[n] * scalefac_ref[n];
+                // make all norms:
+                for (int i = 0; i < orbiVec.size(); i++) {
+                    // check if parent must be split
+                    if (parindexVec_ref[n] == -1 or split_serial(orbiVec[i], ix2coef_ref[parindexVec_ref[n]])) {
+                        // mark this node for this orbital for later split
+    #pragma omp critical
+                        {
+                            ix2coef[orbiVec[i]][node_ix] = coeffpVec[orbiVec[i]].size();
+                            coeffpVec[orbiVec[i]].push_back(&(rotatedCoeff(0, i))); // list of coefficient pointers
+                        }
+                        // check norms for split
+                        double wnorm = 0.0; // rotatedCoeff(k, i) is already in cache here
+                        int kstart = 0;
+                        if (parindexVec_ref[n] < 0) kstart = sizecoeff - sizecoeffW; // do not include scaling, even for roots
+                        for (int k = kstart; k < csize; k++) wnorm += std::real(rotatedCoeff(k, i) * std::conj(rotatedCoeff(k, i)));
+                        if (thres < wnorm or prec < 0)
+                            split_serial(orbiVec[i], n) = 1;
+                        else
+                            split_serial(orbiVec[i], n) = 0;
+                    } else {
+                        ix2coef[orbiVec[i]][node_ix] = max_n + 1; // should not be used
+                        split_serial(orbiVec[i], n) = 0;          // do not split if parent does not need to be split
+                    }
+                }
+                nodeReady[n] = 1;
+    #pragma omp critical
+                {
+                    // this ensures that rotatedCoeff is not deleted, when getting out of scope
+                    rotatedCoeffVec.push_back(std::move(rotatedCoeff));
                 }
             }
+        } else { // MPI case
 
-            // HERE IT HAPPENS
-            // TODO conjugaison
-            rotatedCoeff.noalias() = coeffBlock * Un; // Matrix mutiplication
+            // TODO? rotate in bank, so that we do not get and put. Requires clever handling of splits.
+            std::vector<double> split(M, -1.0);    // which orbitals need splitting (at a given node). For now double for compatibilty with bank
+            std::vector<double> needsplit(M, 1.0); // which orbitals need splitting
+            BankAccount nodeSplits;
+            mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
 
-            // 3c) find which orbitals need to further refine this node, and store rotated node (after each other while
-            // in cache).
-            for (int i = 0; i < orbiVec.size(); i++) { // loop over rotated orbitals
-                needsplit[orbiVec[i]] = -1.0;          // default, do not split
-                // check if this node/orbital needs further refinement
-                double wnorm = 0.0;
-                int kwstart = csize - sizecoeffW; // do not include scaling
-                for (int k = kwstart; k < csize; k++) wnorm += std::real(rotatedCoeff.col(i)[k] * std::conj(rotatedCoeff.col(i)[k]));
-                if (thres < wnorm or prec < 0) needsplit[orbiVec[i]] = 1.0;
-                nodesRotated.put_nodedata(orbiVec[i], indexVec_ref[n] + max_ix, csize, rotatedCoeff.col(i).data());
-            }
-            nodeSplits.put_data(indexVec_ref[n], M, needsplit.data());
-        }
-        mpi::barrier(mpi::comm_wrk); // wait until all rotated nodes are ready
-    }
-
-    // 5) reconstruct trees using rotated nodes.
-
-    // only serial case can use OMP, because MPI cannot be used by threads
-    if (serial) {
-        // OMP parallelized, but does not scale well, because the total memory bandwidth is a bottleneck. (the main
-        // operation is writing the coefficient into the tree)
-
-#pragma omp parallel for schedule(static)
-        for (int j = 0; j < M; j++) {
-            if (coeffpVec[j].size() == 0) continue;
-            Psi[j].alloc(1); // All data is stored in coeffpVec[j]
-            Psi[j].complex().makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
-        }
-    } else { // MPI case
-        for (int j = 0; j < M; j++) {
-            if (not mpi::my_func(j)) continue;
-            // traverse possible nodes, and stop descending when norm is zero (leaf in out[j])
-            std::vector<ComplexDouble *> coeffpVec; //
-            std::map<int, int> ix2coef;             // to find the index in coeffVec[] corresponding to a serialIx
-            int ix = 0;
-            std::vector<ComplexDouble *> pointerstodelete; // list of temporary arrays to clean up
-            for (int ibank = 0; ibank < mpi::bank_size; ibank++) {
-                std::vector<int> nodeidVec;
-                ComplexDouble *dataVec; // will be allocated by bank
-                nodesRotated.get_orbblock(j, dataVec, nodeidVec, ibank);
-                if (nodeidVec.size() > 0) pointerstodelete.push_back(dataVec);
-                int shift = 0;
-                for (int n = 0; n < nodeidVec.size(); n++) {
-                    assert(nodeidVec[n] - max_ix >= 0);                // unrotated nodes have been deleted
-                    assert(ix2coef.count(nodeidVec[n] - max_ix) == 0); // each nodeid treated once
-                    ix2coef[nodeidVec[n] - max_ix] = ix++;
+            ComplexMatrix coeffBlock(sizecoeff, N);
+            max_ix++; // largest node index + 1. to store rotated orbitals with different id
+            TaskManager tasks(max_n);
+            for (int nn = 0; nn < max_n; nn++) {
+                int n = tasks.next_task();
+                if (n < 0) break;
+                double thres = prec * prec * scalefac_ref[n] * scalefac_ref[n];
+                // 4a) make list of orbitals that should split the parent node, i.e. include this node
+                int parentid = parindexVec_ref[n];
+                if (parentid == -1) {
+                    // root node, split if output needed
+                    for (int i = 0; i < M; i++) { split[i] = 1.0; }
+                    csize = sizecoeff;
+                } else {
+                    // note that it will wait until data is available
+                    nodeSplits.get_data(parentid, M, split.data());
                     csize = sizecoeffW;
-                    if (parindexVec_ref[nodeidVec[n] - max_ix] < 0) csize = sizecoeff;
-                    coeffpVec.push_back(&dataVec[shift]); // list of coeff pointers
-                    shift += csize;
                 }
+                std::vector<int> orbiVec;
+                std::vector<int> orbjVec;
+                for (int i = 0; i < M; i++) {     // loop over rotated orbitals
+                    if (split[i] < 0.0) continue; // parent node has too small wavelets
+                    orbiVec.push_back(i);
+                }
+
+                // 4b) rotate this node
+                ComplexMatrix coeffBlock(csize, N); // largest possible used size
+                nodesPhi.get_nodeblock(indexVec_ref[n], coeffBlock.data(), orbjVec);
+                coeffBlock.conservativeResize(Eigen::NoChange, orbjVec.size()); // keep only used part
+
+                // chunk of U, with reorganized indices and separate blocks for real and imag:
+                ComplexMatrix Un(orbjVec.size(), orbiVec.size());
+                ComplexMatrix rotatedCoeff(csize, orbiVec.size());
+
+                for (int i = 0; i < orbiVec.size(); i++) {     // loop over included rotated real and imag part of orbitals
+                    for (int j = 0; j < orbjVec.size(); j++) { // loop over input orbital, possibly imaginary parts
+                        Un(j, i) = U(orbjVec[j], orbiVec[i]);
+                    }
+                }
+
+                // HERE IT HAPPENS
+                // TODO conjugaison
+                rotatedCoeff.noalias() = coeffBlock * Un; // Matrix mutiplication
+
+                // 3c) find which orbitals need to further refine this node, and store rotated node (after each other while
+                // in cache).
+                for (int i = 0; i < orbiVec.size(); i++) { // loop over rotated orbitals
+                    needsplit[orbiVec[i]] = -1.0;          // default, do not split
+                    // check if this node/orbital needs further refinement
+                    double wnorm = 0.0;
+                    int kwstart = csize - sizecoeffW; // do not include scaling
+                    for (int k = kwstart; k < csize; k++) wnorm += std::real(rotatedCoeff.col(i)[k] * std::conj(rotatedCoeff.col(i)[k]));
+                    if (thres < wnorm or prec < 0) needsplit[orbiVec[i]] = 1.0;
+                    nodesRotated.put_nodedata(orbiVec[i], indexVec_ref[n] + max_ix, csize, rotatedCoeff.col(i).data());
+                }
+                nodeSplits.put_data(indexVec_ref[n], M, needsplit.data());
             }
+            mpi::barrier(mpi::comm_wrk); // wait until all rotated nodes are ready
+        }
 
-            Psi[j].alloc(1);
-            Psi[j].complex().makeTreefromCoeff(refTree, coeffpVec, ix2coef, prec);
+        // 5) reconstruct trees using rotated nodes.
 
-            for (ComplexDouble *p : pointerstodelete) delete[] p;
-            pointerstodelete.clear();
+        // only serial case can use OMP, because MPI cannot be used by threads
+        if (serial) {
+            // OMP parallelized, but does not scale well, because the total memory bandwidth is a bottleneck. (the main
+            // operation is writing the coefficient into the tree)
+
+    #pragma omp parallel for schedule(static)
+            for (int j = 0; j < M; j++) {
+                if (coeffpVec[j].size() == 0) continue;
+                // Psi[j].alloc(1); // All data is stored in coeffpVec[j]
+                Psi[j].alloc_comp(q);
+                Psi[j].complex(q).makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
+            }
+        } else { // MPI case
+            for (int j = 0; j < M; j++) {
+                if (not mpi::my_func(j)) continue;
+                // traverse possible nodes, and stop descending when norm is zero (leaf in out[j])
+                std::vector<ComplexDouble *> coeffpVec; //
+                std::map<int, int> ix2coef;             // to find the index in coeffVec[] corresponding to a serialIx
+                int ix = 0;
+                std::vector<ComplexDouble *> pointerstodelete; // list of temporary arrays to clean up
+                for (int ibank = 0; ibank < mpi::bank_size; ibank++) {
+                    std::vector<int> nodeidVec;
+                    ComplexDouble *dataVec; // will be allocated by bank
+                    nodesRotated.get_orbblock(j, dataVec, nodeidVec, ibank);
+                    if (nodeidVec.size() > 0) pointerstodelete.push_back(dataVec);
+                    int shift = 0;
+                    for (int n = 0; n < nodeidVec.size(); n++) {
+                        assert(nodeidVec[n] - max_ix >= 0);                // unrotated nodes have been deleted
+                        assert(ix2coef.count(nodeidVec[n] - max_ix) == 0); // each nodeid treated once
+                        ix2coef[nodeidVec[n] - max_ix] = ix++;
+                        csize = sizecoeffW;
+                        if (parindexVec_ref[nodeidVec[n] - max_ix] < 0) csize = sizecoeff;
+                        coeffpVec.push_back(&dataVec[shift]); // list of coeff pointers
+                        shift += csize;
+                    }
+                }
+
+                // Psi[j].alloc(1);
+                Psi[j].alloc_comp(q);
+                Psi[j].complex(q).makeTreefromCoeff(refTree, coeffpVec, ix2coef, prec);
+
+                for (ComplexDouble *p : pointerstodelete) delete[] p;
+                pointerstodelete.clear();
+            }
         }
     }
 }
@@ -1433,7 +1437,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
  * Phi input functions, Psi output functions
  *
  */
-void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec) { //Todo: update to handle multiple components
+void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec) { 
 
     if (Phi[0].iscomplex()) {
         rotate_cplx(Phi, U, Psi, prec);
@@ -1449,7 +1453,8 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
     if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
 
-    for (int l = 0; l < Phi[0].Ncomp(); l++) {
+    for (int q = 0; q < Phi[0].Ncomp(); q++) {
+        std::cout << "Rotating component " << q << std::endl;
         // 1) make union tree without coefficients. Note that the ref tree is always real (in fact it has no coeff)
         FunctionTree<3> refTree(*Phi.vecMRA);
         mpi::allreduce_Tree_noCoeff(refTree, Phi, mpi::comm_wrk);
@@ -1487,7 +1492,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
             std::vector<double> scalefac;
             for (int j = 0; j < N; j++) {
                 // make vector with all coef pointers and their indices in the union grid
-                Phi[j].real().makeCoeffVector(coeffVec[j], indexVec[j], parindexVec, scalefac, max_ix, refTree); //adapt, similar to calc_overlap_matrix
+                Phi[j].real(q).makeCoeffVector(coeffVec[j], indexVec[j], parindexVec, scalefac, max_ix, refTree); //adapt, similar to calc_overlap_matrix
                 // make a map that gives j from indexVec
                 int orb_node_ix = 0;
                 for (int ix : indexVec[j]) {
@@ -1675,9 +1680,10 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     #pragma omp parallel for schedule(static)
             for (int j = 0; j < M; j++) {
                 if (coeffpVec[j].size() == 0) continue;
-                Psi[j].alloc(1);
-                Psi[j].real().clear();
-                Psi[j].real().makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
+                // Psi[j].alloc(1);
+                Psi[j].alloc_comp(q);
+                Psi[j].real(q).clear();
+                Psi[j].real(q).makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
             }
 
         } else { // MPI case
@@ -1705,8 +1711,9 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                         shift += csize;
                     }
                 }
-                Psi[j].alloc(1);
-                Psi[j].real().makeTreefromCoeff(refTree, coeffpVec, ix2coef, prec);
+                // Psi[j].alloc(1);
+                Psi[j].alloc_comp(q);
+                Psi[j].real(q).makeTreefromCoeff(refTree, coeffpVec, ix2coef, prec);
 
                 for (double *p : pointerstodelete) delete[] p;
                 pointerstodelete.clear();
