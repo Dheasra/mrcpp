@@ -437,10 +437,17 @@ int main(int argc, char **argv) {
     std::cout << "tut7" << '\n';
     
     CompFunctionVector Psi_vector;
-    Psi_vector.push_back(Psi_alt_1);
-    Psi_vector.push_back(Psi_alt_2);
+    CompFunction<3> Psi_alt_3(mra, 2);
+    CompFunction<3> Psi_alt_4(mra, 2);
+    project(Psi_alt_3, Be_1s, building_precision, 0); // Initialize the Psi_alt_ function to zero
+    project(Psi_alt_4, Be_2s, building_precision, 1); // Initialize the kramer_1 function to zero
+
+    Psi_vector.push_back(Psi_alt_3);
+    Psi_vector.push_back(Psi_alt_4);
 
     CompFunctionVector Phi_vector;
+    CompFunction<3> Psi_alt_5(mra, 2);
+    project(Psi_alt_5, Be_2s, building_precision, 1);
     // Phi_vector.push_back(kramer_1);
     // Phi_vector.push_back(kramer_1);
     Phi_vector.push_back(Psi_alt_2); // Just to have the same size as Psi_vector
@@ -450,7 +457,7 @@ int main(int argc, char **argv) {
     std::cout << "Overlap matrix: " << '\n';
     for (int i = 0; i < overlap.rows(); ++i) {
         for (int j = 0; j < overlap.cols(); ++j) {
-            std::cout << overlap(i,j) << ", " << '\t';
+            std::cout << overlap(i,j) << " " << dot(Psi_vector[i], Phi_vector[j]) << ", " << '\t';
         }
         std::cout << '\n';
     }
@@ -463,12 +470,20 @@ int main(int argc, char **argv) {
     rotator(1,0) = std::complex<double>(sin(angle), 0.0);
     
     CompFunctionVector Psi_rotated;
-    Psi_rotated.push_back(Psi_alt_1);
-    Psi_rotated.push_back(Psi_alt_2);
+    Psi_rotated.push_back(Psi_alt_3);
+    Psi_rotated.push_back(Psi_alt_4);
 
     mrcpp::rotate(Psi_rotated, rotator);
+
+    ComplexDouble dotut3 = dot(Psi_rotated[0], Psi_alt_5);
+    ComplexDouble dotut4 = dot(Psi_rotated[1], Psi_alt_5);
+    // ComplexDouble dotut = dot(kramer_1, Psi_1[0]);
+    std::cout << "tut9" << '\n';
+    std::cout << dotut3 << '\n';
+    std::cout << dotut4 << '\n';
+
     std::cout << "tut10" << Psi_rotated[0].Ncomp() << " " << Psi_rotated[1].Ncomp() << '\n';
-    ComplexMatrix overlap_rotated = mrcpp::calc_overlap_matrix(Psi_rotated, Phi_vector);
+    ComplexMatrix overlap_rotated = mrcpp::calc_overlap_matrix(Psi_rotated, Psi_vector);
     std::cout << "Overlap matrix: " << '\n';
     for (int i = 0; i < overlap_rotated.rows(); ++i) {
         for (int j = 0; j < overlap_rotated.cols(); ++j) {

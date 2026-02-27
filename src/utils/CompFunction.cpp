@@ -1568,6 +1568,14 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 // HERE IT HAPPENS!
                 rotatedCoeff.noalias() = coeffBlock * Un; // Matrix mutiplication
 
+                
+                std::cout << "Rotating node " << n << " / " << max_n << " with " << orbjVec.size() << " input orbitals and " << orbiVec.size() << " output orbitals." << std::endl;
+                // for (int a = 0; a < orbiVec.size(); a++) {
+                //     for (int b = 0; b < orbjVec.size(); b++) {
+                //         std::cout << "Un(" << orbjVec[b] << ", " << orbiVec[a] << ") = " << Un(orbjVec[b], orbiVec[a]) << std::endl;
+                //     }
+                // }
+
                 // 4d) store and make rotated node pointers
                 // for now we allocate in buffer, in future could be directly allocated in the final trees
                 double thres = prec * prec * scalefac_ref[n] * scalefac_ref[n];
@@ -1680,9 +1688,10 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     #pragma omp parallel for schedule(static)
             for (int j = 0; j < M; j++) {
                 if (coeffpVec[j].size() == 0) continue;
+                std::cout << "reconstructing orbital " << j << " comp=" << q << std::endl;
                 // Psi[j].alloc(1);
-                Psi[j].alloc_comp(q);
-                Psi[j].real(q).clear();
+                Psi[j].alloc_comp(q, true);
+                // Psi[j].real(q).clear();
                 Psi[j].real(q).makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
             }
 
