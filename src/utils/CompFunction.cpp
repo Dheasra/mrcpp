@@ -58,6 +58,7 @@ template <int D> CompFunction<D>::CompFunction() {
  * @param n1: for instance spin (1=alpha, -1=beta, 2=paired) or anything else
  */
 template <int D> CompFunction<D>::CompFunction(int n1, int nComponents) {
+    std::cout << "CompFunction::CompFunction constructor with n1: start " << n1 << std::endl;
     func_ptr = std::make_shared<TreePtr<D>>(false);
     CompD = func_ptr->real;
     CompC = func_ptr->cplx;
@@ -70,6 +71,7 @@ template <int D> CompFunction<D>::CompFunction(int n1, int nComponents) {
     func_ptr->isreal = 1;
     func_ptr->iscomplex = 0;
     func_ptr->data.shared = false;
+    std::cout << "CompFunction::CompFunction constructor with n1: " << n1 << std::endl;
     func_ptr->data.Ncomp = nComponents;
 }
 
@@ -364,6 +366,7 @@ template <int D> void CompFunction<D>::dagger() {
 }
 
 template <int D> FunctionTree<D, double> &CompFunction<D>::real(int i) {
+    // std::cout << "CompFunction::real not const real: i " << i << std::endl;
     if (!isreal()) MSG_ABORT("not real function");
     if (CompD[i] == nullptr) alloc_comp(i);
     return *CompD[i];
@@ -383,6 +386,7 @@ template <int D> FunctionTree<D, ComplexDouble> &CompFunction<D>::complex(int i)
 }
 
 template <int D> const FunctionTree<D, double> &CompFunction<D>::real(int i) const {
+    // std::cout << "CompFunction::real const real: i " << i << std::endl;
     if (!isreal()) MSG_ABORT("not real function");
     return *CompD[i];
 }
@@ -1021,6 +1025,7 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, dou
     bool need_to_project = not(out.isShared()) or mpi::share_master();
     out.func_ptr->isreal = 1;
     out.func_ptr->iscomplex = 0;
+    std::cout << "CompFunction::project -- Projecting real function onto component " << comp << "Ncomp " << out.Ncomp() << std::endl;
 
     // allocating a component if compFunction is empty
     if (out.Ncomp() < 1) out.alloc(1);
@@ -1034,11 +1039,17 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, dou
     // allocating and projecting the component(s)
     if (need_to_project) {
         for (int i = 0; i < out.Ncomp(); i++) {
+            std::cout << "CompFunction::project -- need to project comp " << i;
             if (i == comp) {
-                build_grid(*out.CompD[i], f); 
+                std::cout << " actual component" << std::endl;
                 out.alloc_comp(i);
+                std::cout << "CompFunction::project -- component allocated " << std::endl;
+                build_grid(*out.CompD[i], f);
+                std::cout << "CompFunction::project -- grid built " << std::endl;
                 mrcpp::project<D, double>(prec, *out.CompD[i], f);
+                std::cout << "CompFunction::project -- projection done " << std::endl;
             } else if (need_to_allocate) {
+                std::cout << " other component" << std::endl;
                 // build_grid(*out.CompD[i], fzero); // commented out as it is probably unnecessary for a zero function
                 out.alloc_comp(i);
                 mrcpp::project<D, double>(prec, *out.CompD[i], fzero);
@@ -1080,8 +1091,8 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, Com
     if (need_to_project) {
         for (int i = 0; i < out.Ncomp(); i++) {
             if (i == comp) {
-                build_grid(*out.CompC[i], f); 
                 out.alloc_comp(i);
+                build_grid(*out.CompC[i], f); 
                 mrcpp::project<D, ComplexDouble>(prec, *out.CompC[i], f);
             } else if (need_to_allocate) {
                 // build_grid(*out.CompC[i], fzero); // commented out as it is probably unnecessary for a zero function
@@ -1444,6 +1455,13 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
         return;
     }
 
+    for (int a = 0; a < U.rows(); a++) {
+        for (int b = 0; b < U.cols(); b++) {
+            std::cout << "Un(" << a << ", " << b << ") = " << U(a, b) << "; ";
+        }
+        std::cout << std::endl;
+    }
+
     // The principle of this routine is that nodes are rotated one by one using matrix multiplication.
     // The routine does avoid when possible to move data, but uses pointers and indices manipulation.
     // MPI version does not use OMP yet, Serial version uses OMP
@@ -1454,7 +1472,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
 
     for (int q = 0; q < Phi[0].Ncomp(); q++) {
-        std::cout << "Rotating component " << q << std::endl;
+        std::cout << "mrcpp::CompFunction::rotate startut component " << q << " with Phi (1st argument) norm " << Phi[0].norm() << " with Psi norm " << Psi[0].norm() << std::endl;
         // 1) make union tree without coefficients. Note that the ref tree is always real (in fact it has no coeff)
         FunctionTree<3> refTree(*Phi.vecMRA);
         mpi::allreduce_Tree_noCoeff(refTree, Phi, mpi::comm_wrk);
@@ -1501,11 +1519,16 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                     node2orbVec[ix].push_back(j);
                 }
             }
+            // CompFunction test(*defaultCompMRA<3>, 1); 
+            // test.defreal();
+            // test.real(0).makeTreefromCoeff(refTree, coeffVec[0], indexVec[0], prec);
+            // std::cout << "mrcpp::CompFunction::rotate Test initial norm " << test.norm() << std::endl;
         } else { // MPI case
             // send own nodes to bank, identifying them through the serialIx of refTree
             save_nodes(Phi, refTree, nodesPhi);
             mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
         }
+        std::cout << "mrcpp::CompFunction::rotate post tut initital loop component " << q << " with Phi (1st argument) norm " << Phi[0].norm() << " with Psi norm " << Psi[0].norm() << std::endl;
 
         // 4) rotate all the nodes
         IntMatrix split_serial;                          // in the serial case all split are stored in one array
@@ -1528,7 +1551,8 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
             // assumes the nodes are ordered such that parent are treated before children. BFS or DFS ok.
             // NB: the n must be traversed approximately in right order: Thread n may have to wait until som other preceding
             // n is finished.
-    #pragma omp parallel for schedule(dynamic)
+            std::cout << "mrcpp::CompFunction::rotate start node loop max_n = " << max_n << std::endl;
+        #pragma omp parallel for schedule(dynamic)
             for (int n = 0; n < max_n; n++) {
                 int csize;
                 int node_ix = indexVec_ref[n]; // SerialIx for this node in the reference tree
@@ -1550,7 +1574,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 // 4b) make a list of rotated orbitals needed for this node
                 // OMP must wait until parent is ready
                 while (parindexVec_ref[n] >= 0 and nodeReady[ix2coef_ref[parindexVec_ref[n]]] == 0) {
-    #pragma omp flush
+        #pragma omp flush
                 };
 
                 std::vector<int> orbiVec;
@@ -1568,14 +1592,6 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 // HERE IT HAPPENS!
                 rotatedCoeff.noalias() = coeffBlock * Un; // Matrix mutiplication
 
-                
-                std::cout << "Rotating node " << n << " / " << max_n << " with " << orbjVec.size() << " input orbitals and " << orbiVec.size() << " output orbitals." << std::endl;
-                // for (int a = 0; a < orbiVec.size(); a++) {
-                //     for (int b = 0; b < orbjVec.size(); b++) {
-                //         std::cout << "Un(" << orbjVec[b] << ", " << orbiVec[a] << ") = " << Un(orbjVec[b], orbiVec[a]) << std::endl;
-                //     }
-                // }
-
                 // 4d) store and make rotated node pointers
                 // for now we allocate in buffer, in future could be directly allocated in the final trees
                 double thres = prec * prec * scalefac_ref[n] * scalefac_ref[n];
@@ -1584,7 +1600,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                     // check if parent must be split
                     if (parindexVec_ref[n] == -1 or split_serial(orbiVec[i], ix2coef_ref[parindexVec_ref[n]])) {
                         // mark this node for this orbital for later split
-    #pragma omp critical
+        #pragma omp critical
                         {
                             ix2coef[orbiVec[i]][node_ix] = coeffpVec[orbiVec[i]].size();
                             coeffpVec[orbiVec[i]].push_back(&(rotatedCoeff(0, i))); // list of coefficient pointers
@@ -1604,7 +1620,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                     }
                 }
                 nodeReady[n] = 1;
-    #pragma omp critical
+        #pragma omp critical
                 {
                     // this ensures that rotatedCoeff is not deleted, when getting out of scope
                     rotatedCoeffVec.push_back(std::move(rotatedCoeff));
@@ -1676,7 +1692,8 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
             }
             mpi::barrier(mpi::comm_wrk); // wait until all rotated nodes are ready
         }
-        
+        std::cout << "mrcpp::CompFunction::rotate pre-reconstruction component " << q << " with Phi (1st argument) norm " << Phi[0].norm() << " with Psi norm " << Psi[0].norm() << std::endl;
+
 
         // 5) reconstruct trees using rotated nodes.
 
@@ -1684,19 +1701,24 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
         if (serial) {
             // OMP parallelized, but does not scale well, because the total memory bandwidth is a bottleneck. (the main
             // operation is writing the coefficient into the tree)
-
-    #pragma omp parallel for schedule(static)
+        
+            //debug
+            // CompFunction test(*defaultCompMRA<3>, 1); 
+            // test.defreal();
+            // test.real(0).makeTreefromCoeff(refTree, coeffpVec[0], ix2coef[0], prec);
+            // std::cout << "Test reconstruction norm " << test.norm() << std::endl;
+        #pragma omp parallel for schedule(static)
             for (int j = 0; j < M; j++) {
                 if (coeffpVec[j].size() == 0) continue;
                 std::cout << "reconstructing orbital " << j << " comp=" << q << std::endl;
                 // Psi[j].alloc(1);
-                Psi[j].alloc_comp(q, true);
-                // Psi[j].real(q).clear();
+                Psi[j].alloc_comp(q, false);
+                Psi[j].real(q).clear();
                 Psi[j].real(q).makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
             }
 
         } else { // MPI case
-
+            std::cout << "AAAAAAA mrcpp::CompFunction::rotate MPI CASE CACAAAAAAAAAAA" << std::endl;
             for (int j = 0; j < M; j++) {
                 if (not mpi::my_func(j)) continue;
                 // traverse possible nodes, and stop descending when norm is zero (leaf in out[j])
@@ -1728,6 +1750,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 pointerstodelete.clear();
             }
         }
+        std::cout << "mrcpp::CompFunction::rotate end component " << q << " with Phi (1st argument) norm " << Phi[0].norm() << " with Psi norm " << Psi[0].norm() << std::endl;
     }
 }
 
@@ -2609,11 +2632,9 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
             std::vector<int> indexVec;    // serialIx of the nodes
             for (int j = 0; j < N; j++) {
                 // make vector with all coef pointers and their indices in the union grid
-                std::vector<std::vector<ComplexDouble *>> coeffVecTemp(N);
-                // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
-                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
-                if ((BraKet[j].Ncomp() < 2) && (std::abs(BraKet[j].func_ptr->data.d1[1]-1.0) < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
-                BraKet[j].complex(l + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                std::vector<std::vector<ComplexDouble *>> coeffVecTemp(N); 
+
+                BraKet[j].complex(l).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // add the contribution for this component to the total coefficient vector for this orbital
                 for (int l = 0; l < coeffVecTemp[j].size(); l++) {
                     if (coeffVec[j].size() <= l) {
@@ -2777,9 +2798,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
                 // make vector with all coef pointers and their indices in the union grid
                 // BraKet[j].real().makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 std::vector<std::vector<double *>> coeffVecTemp(N);
-                int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
-                if ((BraKet[j].Ncomp() < 2) && (std::abs(BraKet[j].func_ptr->data.d1[1]-1.0) < 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
-                BraKet[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
+                BraKet[j].real(l).makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 // add the contribution for this component to the total coefficient vector for this orbital
                 for (int l = 0; l < coeffVecTemp[j].size(); l++) {
                     if (coeffVec[j].size() <= l) {
@@ -2888,6 +2907,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) { S(i, j) *= std::conj(Fac[i]) * Fac[j]; }
         }
+        Stot += S;
     }
 
     return Stot;
