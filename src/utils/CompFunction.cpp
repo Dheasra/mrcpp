@@ -25,6 +25,7 @@
 namespace mrcpp {
 
 template <int D> MultiResolutionAnalysis<D> *defaultCompMRA = nullptr; // Global MRA
+// template <int D> std::shared_ptr<MultiResolutionAnalysis<D>> defaultCompMRA = nullptr; // Global MRA would prolly be better but requires many changes
 
 template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra) {
     defaultCompMRA<D> = &mra;
@@ -138,6 +139,7 @@ template <int D> CompFunction<D>::CompFunction(int n1, bool share, int nComponen
     func_ptr->iscomplex = 0;
     func_ptr->data.shared = share;
     func_ptr->data.Ncomp = nComponents;
+    // for (int i = 0; i < 4; i++) CompD[i]->setMRA() = *defaultCompMRA<D>;
 }
 
 /*
@@ -430,24 +432,35 @@ template <int D> void CompFunction<D>::setCplx(FunctionTree<D, ComplexDouble> *t
  *
  */
 template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp) {
-
+    MSG_INFO("debug aaaa");
     if (Ncomp() < inp.Ncomp()) {
         func_ptr->data = inp.func_ptr->data;
         alloc(inp.Ncomp(), true);
     }
 
+    MSG_INFO("debug bbbb");
+
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (inp.isreal() and c.imag() < MachineZero) {
+            MSG_INFO("fuck israel " << i);
             CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
         } else {
+            MSG_INFO("debug cccc");
             if (this->isreal()) {
+                MSG_INFO("tututututut")
                 CompD[i]->CopyTreeToComplex(CompC[i]);
+                MSG_INFO("tututututut 2")
                 delete CompD[i];
+                MSG_INFO("tututututut 3")
                 CompD[i] = nullptr;
+                MSG_INFO("tututututut 4")
                 func_ptr->iscomplex = true;
+                MSG_INFO("tututututut 5")
                 func_ptr->isreal = false;
             }
+            MSG_INFO("tututututut 6")
             CompC[i]->add_inplace(c, *inp.CompC[i]);
+            MSG_INFO("tututututut 7")
         }
     }
 }
@@ -563,9 +576,12 @@ template <int D> void add(CompFunction<D> &out, ComplexDouble a, CompFunction<D>
     coefs[0] = a;
     coefs[1] = b;
 
+    MSG_INFO("initial --add: recasting into linear combination");
+
     std::vector<CompFunction<D>> funcs; // NB: not a CompFunctionVector, because not run in parallel!
     funcs.push_back(inp_a);
     funcs.push_back(inp_b);
+    MSG_INFO("add: recasting into linear combination");
 
     linear_combination(out, coefs, funcs, prec, conjugate);
 }
@@ -645,7 +661,9 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
  *
  */
 void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec) {
+    MSG_INFO("tut 1");
     multiply(prec, out, 1.0, inp, inp, -1, false, false, true);
+    MSG_INFO("tut 2");
     if (out.iscomplex()) {
         // copy onto real components
         for (int i = 0; i < out.Ncomp(); i++) {
@@ -671,6 +689,7 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Comp
  *  In case of mixed real/complex inputs, the real functions are converted into complex functions.
  */
 template <int D> void multiply(double prec, CompFunction<D> &out, double coef, CompFunction<D> inp_a, CompFunction<D> inp_b, int maxIter, bool absPrec, bool useMaxNorms, bool conjugate) {
+    MSG_INFO("pouet 1");
     if (inp_b.func_ptr->conj) MSG_ABORT("Not implemented");
     if (inp_a.func_ptr->conj) conjugate = (not conjugate);
     bool need_to_multiply = not(out.isShared()) or mpi::share_master();
@@ -684,22 +703,30 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
         if (!out_allocated) out.alloc(out.Ncomp());
         return;
     }
+    MSG_INFO("pouet 2");
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
         out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] * inp_b.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
+        MSG_INFO("pouet 3 comp " << comp);
         if (inp_a.isreal() and inp_b.isreal()) {
             if (need_to_multiply) {
                 if (!out_allocated) out.alloc(out.Ncomp());
                 if (prec < 0.0) {
+                    MSG_INFO("pouet 4a");
                     // Union grid
                     build_grid(*out.CompD[comp], *inp_a.CompD[comp]);
+                    MSG_INFO("pouet 5a");
                     build_grid(*out.CompD[comp], *inp_b.CompD[comp]);
+                    MSG_INFO("pouet 6a");
                     mrcpp::multiply(prec, *out.CompD[comp], coef, *inp_a.CompD[comp], *inp_b.CompD[comp], 0, false, false, conjugate);
                 } else {
+                    MSG_INFO("pouet 4b");
                     // Adaptive grid
                     mrcpp::multiply(prec, *out.CompD[comp], coef, *inp_a.CompD[comp], *inp_b.CompD[comp], maxIter, absPrec, useMaxNorms, conjugate);
+                    MSG_INFO("pouet 5b");
                 }
             }
         } else {
+            MSG_INFO("pouet complex");
             // At least one of the inputs is complex
             // if one of the input is real, we simply make a new complex copy of it
             bool inp_aisReal = inp_a.isreal();
@@ -763,6 +790,7 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
             }
         }
     }
+    MSG_INFO("pouet fin");
     mpi::share_function(out, 0, 9911, mpi::comm_share);
 }
 

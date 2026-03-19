@@ -118,6 +118,7 @@ public:
     FunctionTree<D, double> **CompD;        //  = func_ptr->real so that we can use name CompD instead of func_ptr.real
     FunctionTree<D, ComplexDouble> **CompC; // = func_ptr->cplx
 
+    std::shared_ptr<mrcpp::TreePtr<D>> func_ptr;
     std::string name;
 
     // additional data that describe each component (defined by user):
@@ -168,7 +169,6 @@ public:
     void dagger();
     FunctionTree<D, double> &imag(int i = 0);             // does not make sense now
     const FunctionTree<D, double> &imag(int i = 0) const; // does not make sense now
-    std::shared_ptr<mrcpp::TreePtr<D>> func_ptr;
 };
 
 template <int D> void CopyToComplex(CompFunction<D> &out, const CompFunction<D> &inp);
