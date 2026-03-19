@@ -203,7 +203,8 @@ template <int D> void orthogonalize(double prec, CompFunction<D> &Bra, CompFunct
 class CompFunctionVector : public std::vector<CompFunction<3>> {
 public:
     CompFunctionVector(int N = 0);
-    MultiResolutionAnalysis<3> *vecMRA;
+    // MultiResolutionAnalysis<3> *vecMRA; //RAW_VER
+    std::shared_ptr<MultiResolutionAnalysis<3>> vecMRA;
     void distribute();
 
     // CompFunction<3> operator[](int i) const;

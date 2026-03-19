@@ -24,11 +24,12 @@
 
 namespace mrcpp {
 
-template <int D> MultiResolutionAnalysis<D> *defaultCompMRA = nullptr; // Global MRA
-// template <int D> std::shared_ptr<MultiResolutionAnalysis<D>> defaultCompMRA = nullptr; // Global MRA would prolly be better but requires many changes
+// template <int D> MultiResolutionAnalysis<D> *defaultCompMRA = nullptr; // Global MRA RAW_VER
+template <int D> std::shared_ptr<MultiResolutionAnalysis<D>> defaultCompMRA; // Global MRA would prolly be better but requires many changes
 
 template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra) {
-    defaultCompMRA<D> = &mra;
+    // defaultCompMRA<D> = &mra; //RAW_VER
+    defaultCompMRA<D> = std::make_shared<MultiResolutionAnalysis<D>>(mra);
     func_ptr = std::make_shared<TreePtr<D>>(false);
     CompD = func_ptr->real;
     CompC = func_ptr->cplx;
@@ -37,7 +38,8 @@ template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra) 
 }
 
 template <int D> CompFunction<D>::CompFunction(MultiResolutionAnalysis<D> &mra, int nComponents) {
-    defaultCompMRA<D> = &mra;
+    // defaultCompMRA<D> = &mra;//RAW_VER
+    defaultCompMRA<D> = std::make_shared<MultiResolutionAnalysis<D>>(mra);
     func_ptr = std::make_shared<TreePtr<D>>(false);
     CompD = func_ptr->real;
     CompC = func_ptr->cplx;
@@ -2550,7 +2552,7 @@ CompFunctionVector multiply_one_comp(CompFunctionVector &Phi, RepresentableFunct
 }
 
 void SetdefaultMRA(MultiResolutionAnalysis<3> *MRA) {
-    defaultCompMRA<3> = MRA;
+    defaultCompMRA<3> = std::make_shared<MultiResolutionAnalysis<3>>(*MRA);
 }
 
 ComplexVector dot(CompFunctionVector &Bra, CompFunctionVector &Ket) {
@@ -2621,7 +2623,8 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
     int N = BraKet.size();
     ComplexMatrix Stot = ComplexMatrix::Zero(N, N);
     // DoubleMatrix Sreal = Stot.real();
-    MultiResolutionAnalysis<3> *mra = BraKet.vecMRA;
+    // MultiResolutionAnalysis<3> *mra = BraKet.vecMRA; //RAW_VER
+    MultiResolutionAnalysis<3> *mra = BraKet.vecMRA.get();
 
     // 1) make union tree without coefficients
     mrcpp::FunctionTree<3> refTree(*mra);
@@ -2785,7 +2788,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
     int N = BraKet.size();
     ComplexMatrix Stot = ComplexMatrix::Zero(N, N);
 
-    MultiResolutionAnalysis<3> *mra = BraKet.vecMRA;
+    MultiResolutionAnalysis<3> *mra = BraKet.vecMRA.get();
 
     // 1) make union tree without coefficients
     mrcpp::FunctionTree<3> refTree(*mra);
@@ -2964,7 +2967,7 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
             }
         }
     }
-    MultiResolutionAnalysis<3> *mra = Bra.vecMRA;
+    MultiResolutionAnalysis<3> *mra = Bra.vecMRA.get();
 
     int N = Bra.size();
     int M = Ket.size();
@@ -3214,7 +3217,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
     // std::cout << "Calculating overlap matrix... (real version)" << std::endl;
     mrcpp::mpi::barrier(mrcpp::mpi::comm_wrk); // for consistent timings
 
-    MultiResolutionAnalysis<3> *mra = Bra.vecMRA;
+    MultiResolutionAnalysis<3> *mra = Bra.vecMRA.get();
 
     int N = Bra.size();
     int M = Ket.size();
