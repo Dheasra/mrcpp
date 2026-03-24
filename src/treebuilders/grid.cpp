@@ -143,11 +143,11 @@ template <int D> void build_grid(FunctionTree<D> &out, const GaussExp<D> &inp, i
  *
  */
 template <int D, typename T> void build_grid(FunctionTree<D, T> &out, FunctionTree<D, T> &inp, int maxIter) {
-    MSG_INFO("tut4");
-    auto tuta = out.getMRA(); // just to silence unused variable warning, should be removed when the MRA check is implemented
-    MSG_INFO("tut4.2");
-    auto tutb = inp.getMRA(); // just to silence unused variable warning, should be removed when the MRA check is implemented
-    MSG_INFO("tut4.3");
+    MSG_INFO("tut4 " << &(out.getMRA()));
+    // auto tutb = inp.getMRA();
+    // MSG_INFO("tut4.2");
+    // auto tuta = out.getMRA();
+    // MSG_INFO("tut4.3");
     if (out.getMRA() != inp.getMRA()) MSG_ABORT("Incompatible MRA");
     MSG_INFO("tut4.5");
     auto maxScale = out.getMRA().getMaxScale();
@@ -245,12 +245,20 @@ template <int D, typename T> void copy_grid(FunctionTree<D, T> &out, FunctionTre
  *
  */
 template <int D> void copy_grid(CompFunction<D> &out, CompFunction<D> &inp, int n_comp) {
+    MSG_INFO("Copy grid start "<< n_comp << " before alloc "<< &(out.CompD[0]->getMRA()) << " § " << out.Ncomp());
     out.free();
-    out.func_ptr->data = inp.func_ptr->data;
-    if (n_comp < 0) n_comp = inp.Ncomp();
-    out.alloc(n_comp);
-    for (int i = 0; i < n_comp; i++) {//TODO: résoudre dans le cas où out et inp n'ont pas le même nombre de composantes
-        MSG_INFO("Copying grid of component " << i);
+    out.func_ptr->data = inp.func_ptr->data; 
+    if (n_comp < 0) {
+        n_comp = inp.Ncomp();
+    } else {
+        //if n_comp is not supposed to be the input's Ncomp, then we set out's number of components to n_comp
+        out.func_ptr->data.Ncomp = n_comp; 
+    }
+    MSG_INFO("before alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
+    out.alloc(n_comp+1, false);
+    MSG_INFO("after alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
+    for (int i = 0; i < std::max(n_comp, 1); i++) {//TODO: résoudre
+        MSG_INFO("Copying grid of component " << i << " real?= "<< inp.isreal() << " " << &(out.CompD[i]->getMRA()) << " " << &(inp.CompD[i]->getMRA()));
         if (inp.isreal()) build_grid(*out.CompD[i], *inp.CompD[i]);
         if (inp.iscomplex()) build_grid(*out.CompC[i], *inp.CompC[i]);
     }

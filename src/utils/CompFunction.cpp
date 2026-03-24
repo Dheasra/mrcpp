@@ -278,6 +278,7 @@ template <int D> double CompFunction<D>::getSquareNorm() const {
 //  nalloc is the number of components allocated. ialloc=1 allocates one tree.
 //  deletes all old trees if found.
 template <int D> void CompFunction<D>::alloc(int nalloc, bool zero) {
+    MSG_INFO("default MRA =" << defaultCompMRA<D>);
     if (defaultCompMRA<D> == nullptr) MSG_ABORT("Default MRA not yet defined");
     if (isreal() == 0 and iscomplex() == 0) MSG_ABORT("Function must be defined either real or complex");
     for (int i = 0; i < nalloc; i++) {
@@ -285,12 +286,16 @@ template <int D> void CompFunction<D>::alloc(int nalloc, bool zero) {
         delete CompC[i];
         CompD[i] = nullptr;
         CompC[i] = nullptr;
+        MSG_INFO("Component MRA tut D =" << &(CompD[i]->getMRA()));
+        MSG_INFO("Component MRA tut C =" << &(CompC[i]->getMRA()));
         if (isreal()) {
             CompD[i] = new FunctionTree<D, double>(*defaultCompMRA<D>, func_ptr->shared_mem_real);
+            MSG_INFO("Component MRA def real=" << &(CompD[i]->getMRA()));
             if (zero) CompD[i]->setZero();
         }
         if (iscomplex()) {
             CompC[i] = new FunctionTree<D, ComplexDouble>(*defaultCompMRA<D>, func_ptr->shared_mem_cplx);
+            MSG_INFO("Component MRA def comp=" << &(CompC[i]->getMRA()));
             if (zero) CompC[i]->setZero();
         }
         func_ptr->Ncomp = std::max(Ncomp(), i + 1);
@@ -333,11 +338,15 @@ template <int D> void CompFunction<D>::free() {
         if (CompC[i] != nullptr) delete CompC[i];
         CompD[i] = nullptr;
         CompC[i] = nullptr;
+        // if (CompD[i] != nullptr) CompD[i]->clear();
+        // if (CompC[i] != nullptr) CompC[i]->clear();
     }
     if (this->func_ptr->shared_mem_real) this->func_ptr->shared_mem_real->clear();
     if (this->func_ptr->shared_mem_cplx) this->func_ptr->shared_mem_cplx->clear();
     func_ptr->Ncomp = 0;
 }
+
+// template <int D> void CompFunction<D>::freeTrees()
 
 template <int D> int CompFunction<D>::getSizeNodes() const {
     int size_mb = 0; // Memory size in kB
@@ -444,7 +453,7 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
 
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (inp.isreal() and c.imag() < MachineZero) {
-            MSG_INFO("fuck israel " << i);
+            MSG_INFO("fuck israel " << i << " MerdeRA="<< &(inp.CompD[i]->getMRA()));
             CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
         } else {
             MSG_INFO("debug cccc");
@@ -472,11 +481,14 @@ template <int D> int CompFunction<D>::crop(double prec) {
     int nChunksremoved = 0;
     for (int i = 0; i < Ncomp(); i++) {
         if (isreal()) {
+            MSG_INFO("tut "<<i);
             nChunksremoved += CompD[i]->crop(prec, 1.0, false);
         } else {
             nChunksremoved += CompC[i]->crop(prec, 1.0, false);
         }
+        MSG_INFO("loop over "<<i);
     }
+    MSG_INFO("done");
     return nChunksremoved;
 }
 
@@ -664,9 +676,24 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
  */
 void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec) {
     MSG_INFO("tut 1");
-    multiply(prec, out, 1.0, inp, inp, -1, false, false, true);
-    MSG_INFO("tut 2");
-    if (out.iscomplex()) {
+    //compute the density of each component of inp individually
+    CompFunction<3> out_tmp(1, inp.Ncomp());
+    out_tmp.alloc(inp.Ncomp(), true);
+    multiply(prec, out_tmp, 1.0, inp, inp, -1, false, false, true);//todo: allouer les composantes de out avant de les ajouter ensemble
+    
+    MSG_INFO("tut 2")
+    //collect each component's density into out's first (and only) component
+    for (int i = 0; i < out.Ncomp(); i++) {
+        if (not inp.iscomplex()){
+            add(prec, *out.CompD[0], 1.0, *out.CompD[0], 1.0, *out_tmp.CompD[i], false, false, false);
+        } else {
+            ComplexDouble one = (1.0, 0.0);
+            add(prec, *out.CompC[0], one, *out.CompC[0], one, *out_tmp.CompC[i], false, false, false);
+        }
+    }
+
+    MSG_INFO("tut 3 " << &(out.real(0).getMRA()));
+    if (out_tmp.iscomplex()) {
         // copy onto real components
         for (int i = 0; i < out.Ncomp(); i++) {
             out.CompD[i] = out.CompC[i]->Real();
@@ -794,6 +821,7 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
     }
     MSG_INFO("pouet fin");
     mpi::share_function(out, 0, 9911, mpi::comm_share);
+    MSG_INFO("fin fin")
 }
 
 /** @brief out = inp_a * f
@@ -856,7 +884,7 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDoub
  * @param conjugate 
  */
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, double> &inp_b, double prec, bool absPrec, bool useMaxNorms, bool conjugate){
-    MSG_INFO("pouet 1");
+    // MSG_INFO("pouet 1");
     if (inp_a.func_ptr->conj) conjugate = (not conjugate);
     bool need_to_multiply = not(out.isShared()) or mpi::share_master();
     bool out_allocated = true;
@@ -870,30 +898,30 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
         return;
     }
     double coef = 1.0;
-    MSG_INFO("pouet 2");
+    // MSG_INFO("pouet 2");
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
         out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
-        MSG_INFO("pouet 3 comp " << comp);
+        // MSG_INFO("pouet 3 comp " << comp);
         if (inp_a.isreal()) {
             if (need_to_multiply) {
                 if (!out_allocated) out.alloc(inp_a.Ncomp());
                 if (prec < 0.0) {
-                    MSG_INFO("pouet 4a");
+                    // MSG_INFO("pouet 4a");
                     // Union grid
                     build_grid(*out.CompD[comp], *inp_a.CompD[comp]);
-                    MSG_INFO("pouet 5a");
+                    // MSG_INFO("pouet 5a");
                     build_grid(*out.CompD[comp], inp_b);
-                    MSG_INFO("pouet 6a");
+                    // MSG_INFO("pouet 6a");
                     mrcpp::multiply(prec, *out.CompD[comp], coef, *inp_a.CompD[comp], inp_b, 0, false, false, conjugate);
                 } else {
-                    MSG_INFO("pouet 4b");
+                    // MSG_INFO("pouet 4b");
                     // Adaptive grid
                     mrcpp::multiply(prec, *out.CompD[comp], coef, *inp_a.CompD[comp], inp_b, -1, absPrec, useMaxNorms, conjugate);
-                    MSG_INFO("pouet 5b");
+                    // MSG_INFO("pouet 5b");
                 }
             }
         } else {
-            MSG_INFO("pouet complex");
+            // MSG_INFO("pouet complex");
             // inp_a is complex
             // therefore we need to create a complex copy of inp_b
             FunctionTree<D, ComplexDouble> inp_b_comp(inp_b.getMRA(), "temp");
@@ -936,12 +964,12 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
             }
         }
     }
-    MSG_INFO("pouet fin");
+    // MSG_INFO("pouet fin");
     mpi::share_function(out, 0, 9911, mpi::comm_share);
 }
 
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, ComplexDouble> &inp_b, double prec, bool absPrec, bool useMaxNorms, bool conjugate){
-    MSG_INFO("pouet 1");
+    // MSG_INFO("pouet 1");
     if (inp_a.func_ptr->conj) conjugate = (not conjugate);
     bool need_to_multiply = not(out.isShared()) or mpi::share_master();
     bool out_allocated = true;
@@ -956,11 +984,11 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
     }
 
     double coef = 1.0;
-    MSG_INFO("pouet 2");
+    // MSG_INFO("pouet 2");
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
         out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] ; // we could put this is coef if everything is real?
-        MSG_INFO("pouet 3 comp " << comp);
-        MSG_INFO("pouet complex");
+        // MSG_INFO("pouet 3 comp " << comp);
+        // MSG_INFO("pouet complex");
         // Whether or not inp_a is complex, inp_b is, so we simply make a complex copy of inp_a if it is real
         bool inp_aisReal = inp_a.isreal();
         // bool inp_bisReal = inp_b.isreal();
@@ -1012,7 +1040,7 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
         }
         // }
     }
-    MSG_INFO("pouet fin");
+    // MSG_INFO("pouet fin");
     mpi::share_function(out, 0, 9911, mpi::comm_share);
 }
 
@@ -2787,15 +2815,15 @@ ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVec
  *
  */
 ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
+    MSG_INFO("stut");
     int N = BraKet.size();
-    // MSG_INFO("stut");
     ComplexMatrix Stot = ComplexMatrix::Zero(N, N);
     // DoubleMatrix Sreal = Stot.real();
     // MultiResolutionAnalysis<3> *mra = BraKet.vecMRA; //RAW_VER
     // MSG_INFO("start");
     // MultiResolutionAnalysis<3> *mra = BraKet.vecMRA.get();
     std::shared_ptr<MultiResolutionAnalysis<3>> mra = BraKet.vecMRA;
-    // MSG_INFO("post change");
+    MSG_INFO("post change");
 
     // 1) make union tree without coefficients
     mrcpp::FunctionTree<3> refTree(*mra);
