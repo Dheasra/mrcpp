@@ -167,7 +167,7 @@ namespace mrcpp {
                 out.func_ptr->data.c1[i+1] = inp.func_ptr->data.c1[i];
             }
             break;
-        case 2:
+        case 2: //WARNING: We may need to enforce out to be complex in this case, rather than just multiplying the whole phase by i
             // MSG_INFO("Y ");
             // Apply Pauli-Y matrix
             // std::cout << "apply Pauli Y tut0 " << out.Ncomp() << " " << inp.Ncomp() << '\n';

@@ -143,15 +143,15 @@ template <int D> void build_grid(FunctionTree<D> &out, const GaussExp<D> &inp, i
  *
  */
 template <int D, typename T> void build_grid(FunctionTree<D, T> &out, FunctionTree<D, T> &inp, int maxIter) {
-    MSG_INFO("tut4 " << &(out.getMRA()));
+    // MSG_INFO("tut4 " << &(out.getMRA()));
     // auto tutb = inp.getMRA();
     // MSG_INFO("tut4.2");
     // auto tuta = out.getMRA();
     // MSG_INFO("tut4.3");
     if (out.getMRA() != inp.getMRA()) MSG_ABORT("Incompatible MRA");
-    MSG_INFO("tut4.5");
+    // MSG_INFO("tut4.5");
     auto maxScale = out.getMRA().getMaxScale();
-    MSG_INFO("tut5");
+    // MSG_INFO("tut5");
     TreeBuilder<D, T> builder;
     CopyAdaptor<D, T> adaptor(inp, maxScale, nullptr);
     DefaultCalculator<D, T> calculator;
@@ -245,7 +245,7 @@ template <int D, typename T> void copy_grid(FunctionTree<D, T> &out, FunctionTre
  *
  */
 template <int D> void copy_grid(CompFunction<D> &out, CompFunction<D> &inp, int n_comp) {
-    MSG_INFO("Copy grid start "<< n_comp << " before alloc "<< &(out.CompD[0]->getMRA()) << " § " << out.Ncomp());
+    // MSG_INFO("Copy grid start "<< n_comp << " before alloc "<< &(out.CompD[0]->getMRA()) << " § " << out.Ncomp());
     out.free();
     out.func_ptr->data = inp.func_ptr->data; 
     if (n_comp < 0) {
@@ -254,11 +254,11 @@ template <int D> void copy_grid(CompFunction<D> &out, CompFunction<D> &inp, int 
         //if n_comp is not supposed to be the input's Ncomp, then we set out's number of components to n_comp
         out.func_ptr->data.Ncomp = n_comp; 
     }
-    MSG_INFO("before alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
+    // MSG_INFO("before alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
     out.alloc(n_comp+1, false);
-    MSG_INFO("after alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
+    // MSG_INFO("after alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
     for (int i = 0; i < std::max(n_comp, 1); i++) {//TODO: résoudre
-        MSG_INFO("Copying grid of component " << i << " real?= "<< inp.isreal() << " " << &(out.CompD[i]->getMRA()) << " " << &(inp.CompD[i]->getMRA()));
+        // MSG_INFO("Copying grid of component " << i << " real?= "<< inp.isreal() << " " << &(out.CompD[i]->getMRA()) << " " << &(inp.CompD[i]->getMRA()));
         if (inp.isreal()) build_grid(*out.CompD[i], *inp.CompD[i]);
         if (inp.iscomplex()) build_grid(*out.CompC[i], *inp.CompC[i]);
     }

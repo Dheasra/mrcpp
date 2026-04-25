@@ -509,16 +509,22 @@ template <typename T> void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, T> &tre
        3) rank zero broadcast func to everybody
      */
 
-    int N = Phi.size();
+     int N = Phi.size();
+    //  MSG_INFO("start size=" << N)
     for (int j = 0; j < N; j++) {
+        // MSG_INFO("loop " << j <<  " || is real? " << Phi[j].isreal() << " || real exists? " << &Phi[j].CompD[0] << " "<< &Phi[j].CompD[1] <<  " || is complex? " << Phi[j].iscomplex() << " || complex exists? " << &Phi[j].CompC[0] << " "<< &Phi[j].CompC[1])
         if (not my_func(j)) continue;
+        // MSG_INFO("bim")
         if (Phi[j].isreal()) tree.appendTreeNoCoeff(*Phi[j].CompD[0]);
+        // MSG_INFO("tut")
         if (Phi[j].iscomplex()) tree.appendTreeNoCoeff(*Phi[j].CompC[0]);
     }
+    // MSG_INFO("Mid")
 #ifdef MRCPP_HAS_MPI
     mrcpp::mpi::reduce_Tree_noCoeff(tree, comm_wrk);
     mrcpp::mpi::broadcast_Tree_noCoeff(tree, comm_wrk);
 #endif
+    // MSG_INFO("End")
 }
 
 /** @brief Distribute rank zero function to all ranks */
