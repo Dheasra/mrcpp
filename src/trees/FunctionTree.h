@@ -124,6 +124,8 @@ public:
     void CopyTreeToComplex(FunctionTree<2, ComplexDouble> *&out);
     void CopyTreeToComplex(FunctionTree<1, ComplexDouble> *&out);
     void CopyTreeToReal(FunctionTree<3, double> *&out); // for testing
+    void CopyTreeToReal(FunctionTree<2, double> *&out); // for testing and compiling
+    void CopyTreeToReal(FunctionTree<1, double> *&out); // for testing and compiling
 
 protected:
     std::unique_ptr<NodeAllocator<D, T>> genNodeAllocator_p{nullptr};
