@@ -1105,6 +1105,7 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
 
     double coef = 1.0;
     // MSG_INFO("pouet 2");
+    if (!out_allocated) out.alloc(inp_a.Ncomp());
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
         out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] ; // we could put this is coef if everything is real?
         // MSG_INFO("pouet 3 comp " << comp);
@@ -1125,7 +1126,7 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
                 out.func_ptr->isreal = 0;
                 delete out.CompD[comp];
                 delete out.CompC[comp];
-                if (!out_allocated) out.alloc(inp_a.Ncomp());
+                // if (!out_allocated) out.alloc(inp_a.Ncomp());
                 build_grid(*out.CompC[comp], *inp_a.CompC[comp]);
                 // build_grid(*out.CompC[comp], inp_b);
                 mrcpp::multiply(prec, *out.CompC[comp], coef, *inp_a.CompC[comp], inp_b, 0, false, false, conjugate);
@@ -1141,12 +1142,12 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
                     } else {
                         out.func_ptr->iscomplex = 1;
                         out.func_ptr->isreal = 0;
-                        out.alloc(inp_a.Ncomp());
+                        // out.alloc(inp_a.Ncomp());
                     }
                 } else {
                     out.func_ptr->iscomplex = 1;
                     out.func_ptr->isreal = 0;
-                    if (!out_allocated) out.alloc(inp_a.Ncomp());
+                    // if (!out_allocated) out.alloc(inp_a.Ncomp());
                 }
                 mrcpp::multiply(prec, *out.CompC[comp], coef, *inp_a.CompC[comp], inp_b, -1, absPrec, useMaxNorms, conjugate);
             }
