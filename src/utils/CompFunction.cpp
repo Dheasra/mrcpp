@@ -3586,9 +3586,9 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < M; j++) { S(i, j) *= std::conj(FacBra[i]) * FacKet[j]; }
         }
-        #pragma omp critical //test debug test
+        // #pragma omp critical //test debug test
         Stot += S;
-        #pragma omp barrier //test debug test
+        // #pragma omp barrier //test debug test
     }
 
     // restore input
@@ -3674,17 +3674,8 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
             std::vector<int> parindexVec; // serialIx of the parent nodes
             std::vector<int> indexVec;    // serialIx of the nodes
             for (int j = 0; j < N; j++) {
-                // std::cout << "compl_overlap_matrix: Bra Orbital " << j + 1 << "/" << N << std::endl;
                 // make vector with all coef pointers and their indices in the union grid
-                // Bra[j].real().makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
-                // std::vector<std::vector<double *>> coeffVecTemp(N);
-                // std::vector<std::vector<std::shared_ptr<double>>> coeffVecTemp(N);
-                // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
-                // int comp_idx_shift = 0; // In case the components of Bra are not stored starting from 0 in CompC 
-                // if ((Bra[j].Ncomp() < 2) and (std::abs(Bra[j].func_ptr->data.d1[1]-1.0)< 1e-14)) {comp_idx_shift = 0;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
-                // Bra[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 Bra[j].real(l).makeCoeffVector(coeffVecBra[j], indexVec, parindexVec, scalefac, max_ix, refTree);
-                // std::cout << "compl_overlap_matrix: Bra Orbital " << j + 1 << "/" << N << " - done preparing coefficient vector." << std::endl;
                 // make a map that gives j from indexVec
                 int orb_node_ix = 0;
                 for (int ix : indexVec) {
@@ -3693,29 +3684,9 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                     node2orbVecBra[ix].push_back(j);
                 }
             }
-            // std::cout << "compl_overlap_matrix: Serial case: preparing coefficient vectors for Ket..." << Ket[0].Ncomp() << std::endl;
             for (int j = 0; j < M; j++) {
                 // make vector with all coef pointers and their indices in the union grid
-                // Ket[j].real().makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
-                // BraKet[j].real().makeCoeffVector(coeffVecTemp[j], indexVec, parindexVec, scalefac, max_ix, refTree);
-                // std::vector<std::vector<double *>> coeffVecTemp(M);
-                // std::vector<std::vector<std::shared_ptr<double>>> coeffVecTemp(M);
-                // Loop over components, if only only one component, the index in CompC might be shifted by 1 to accomodate Beta orbitals 
-                // int comp_idx_shift = 0; // In case the components of BraKet are not stored starting from 0 in CompC 
-                // if ((Ket[j].Ncomp()== 2) && (std::abs(Ket[j].func_ptr->data.d1[1] -1.0)< 1e-14)) {comp_idx_shift = 1;} //This will shift the index by 1 only in the case of a 1 component Beta function, as the function itself is stored in the second component of CompC
-                // Ket[j].real(l + comp_idx_shift).makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
                 Ket[j].real(l).makeCoeffVector(coeffVecKet[j], indexVec, parindexVec, scalefac, max_ix, refTree);
-                // for (int k = 0; k < Ket[j].Ncomp(); k++) {
-                //     // add the contribution for this component to the total coefficient vector for this orbital
-                //     // for (int l = 0; l < coeffVecTemp[j].size(); l++) {
-                //     //     if (coeffVecKet[j].size() <= l) {
-                //     //         coeffVecKet[j].push_back(new double(*coeffVecTemp[j][l])); //deep copy 
-                //     //     } else {
-                //     //         std::cout << "Adding contribution from component " << k << " to Ket orbital " << j << " for node index " << l << " n comp=" << Ket[j].Ncomp()<< std::endl;
-                //     //         *coeffVecKet[j][l] += *coeffVecTemp[j][l];
-                //     //     }
-                //     // }
-                // }
                 // make a map that gives j from indexVec
                 int orb_node_ix = 0;
                 for (int ix : indexVec) {
@@ -3724,7 +3695,6 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                     node2orbVecKet[ix].push_back(j);
                 }
             }
-            // std::cout << "compl_overlap_matrix: Serial case: done preparing coefficient vectors." << std::endl;
         } else { // MPI case
             // 2) send own nodes to bank, identifying them through the serialIx of refTree
             save_nodes(Bra, refTree, nodesBra);
@@ -3748,27 +3718,41 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 int csize;
                 std::vector<int> orbVecBra; // identifies which Bra orbitals use this node
                 std::vector<int> orbVecKet; // identifies which Ket orbitals use this node
+                //test debug test multithreading start 
+                int node_ix = indexVec_ref[n];      // SerialIx for this node in the reference tree
+                std::map<int, std::vector<int>>::const_iterator itbra; // test debug test multithreading
+                std::map<int, std::vector<int>>::const_iterator itket; // test debug test multithreading
+                if (serial){ //test debug test multithreading
+                    itbra = node2orbVecBra.find(node_ix); //test debug test multithreading
+                    if (itbra == node2orbVecBra.end() || itbra->second.empty()) continue; //test debug test multithreading
+                    itket = node2orbVecKet.find(node_ix); //test debug test multithreading
+                    if (itket == node2orbVecKet.end() || itket->second.empty()) continue; //test debug test multithreading
+                } // test debug test multithreading
+                //test debug test multithreading end
                 if (parindexVec_ref[n] < 0)
                     csize = sizecoeff;
                 else
                     csize = sizecoeffW;
                 if (serial) {
-                    int node_ix = indexVec_ref[n];      // SerialIx for this node in the reference tree
+                    // int node_ix = indexVec_ref[n];      // SerialIx for this node in the reference tree //test debug test multithreading moved above
                     int shift = sizecoeff - sizecoeffW; // to copy only wavelet part (no scaling function contribution)
-                    DoubleMatrix coeffBlockBra(csize, node2orbVecBra[node_ix].size());
-                    DoubleMatrix coeffBlockKet(csize, node2orbVecKet[node_ix].size());
+                    // DoubleMatrix coeffBlockBra(csize, node2orbVecBra[node_ix].size());
+                    // DoubleMatrix coeffBlockKet(csize, node2orbVecKet[node_ix].size());
+                    DoubleMatrix coeffBlockBra(csize, itbra->second.size()); //test debug test multithreading
+                    DoubleMatrix coeffBlockKet(csize, itket->second.size()); //test debug test multithreading
                     if (parindexVec_ref[n] < 0) shift = 0;
-                    // std::cout << "Processing node " << n + 1 << "/" << max_n << " with serial index " << node_ix << " and csize " << csize << std::endl;
-
-                    for (int j : node2orbVecBra[node_ix]) { // loop over indices of the orbitals using this node
-                        int orb_node_ix = orb2nodeBra[j][node_ix];
-                        // std::cout << "Bra orbital " << j << " uses this node with orbital node index " << orb_node_ix << std::endl;
+                    // for (int j : node2orbVecBra[node_ix]) { // loop over indices of the orbitals using this node
+                    //     int orb_node_ix = orb2nodeBra[j][node_ix];
+                    for (int j : itbra->second) { // test debug test multithreading loop over indices of the orbitals using this node
+                        int orb_node_ix = orb2nodeBra[j].at(node_ix); //test debug test multithreading
                         for (int k = 0; k < csize; k++) coeffBlockBra(k, orbVecBra.size()) = coeffVecBra[j][orb_node_ix][k + shift];
                         orbVecBra.push_back(j);
                     }
                     // std::cout << "Node " << n + 1 << "/" << max_n << ": found " << orbVecBra.size() << " Bra orbitals using this node." << std::endl;
-                    for (int j : node2orbVecKet[node_ix]) { // loop over indices of the orbitals using this node
-                        int orb_node_ix = orb2nodeKet[j][node_ix];
+                    // for (int j : node2orbVecKet[node_ix]) { // loop over indices of the orbitals using this node
+                    //     int orb_node_ix = orb2nodeKet[j][node_ix];
+                    for (int j : itket->second) { // test debug test multithreading loop over indices of the orbitals using this node
+                        int orb_node_ix = orb2nodeKet[j].at(node_ix); //test debug test multithreading
                         // std::cout << "Ket orbital " << j << " uses this node with orbital node index " << orb_node_ix << std::endl;
                         for (int k = 0; k < csize; k++) coeffBlockKet(k, orbVecKet.size()) = coeffVecKet[j][orb_node_ix][k + shift];
                         orbVecKet.push_back(j);
@@ -3850,9 +3834,9 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
                 // std::cout << "After multiplying by factors: S(" << i << "," << j << ") = " << S(i,j) << std::endl;
             }
         }
-        #pragma omp critical //test debug test
+        // #pragma omp critical //test debug test
         Stot += S; // accumulate contribution from this component
-        #pragma omp barrier //test debug test
+        // #pragma omp barrier //test debug test
     }
 
     return Stot;
