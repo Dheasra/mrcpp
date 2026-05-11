@@ -124,7 +124,7 @@ namespace mrcpp {
         // The 'prec' parameter is used for precision control.
         // The 'conjugate' parameter indicates whether to apply conjugation.
         ComplexDouble comp_i(0.0, 1.0); // Define the imaginary unit
-        // MSG_INFO("ntm pauli de merde " << pauli);
+
         switch (pauli) {
         case 0:
             //Identity, base case, nothing to apply, just copy the input to the output if they are not the same function
@@ -201,7 +201,7 @@ namespace mrcpp {
             }
             break;
         case 3:
-            MSG_INFO("Z ");
+            // MSG_INFO("Z ");
             // Apply Pauli-Z matrix
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
                 if (inp.isreal() == 1) {

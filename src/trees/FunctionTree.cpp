@@ -678,19 +678,13 @@
   *
   */
  template <int D, typename T> void FunctionTree<D, T>::add_inplace(T c, FunctionTree<D, T> &inp) {
-    // MSG_INFO("Starting adding with grid refinement aaaa")
     auto test =this->getMRA();
-    // MSG_INFO("test a")
     bool testb = (inp.getMRA() == inp.getMRA());
-    // MSG_INFO("Adding with grid refinement");
      if (this->getMRA() != inp.getMRA()) MSG_ABORT("Incompatible MRA");
-    //  MSG_INFO("MRA compatible");
      if (this->getNGenNodes() != 0) MSG_ABORT("GenNodes not cleared");
-    //  MSG_INFO("GenNodes cleared");
      while (refine_grid(*this, inp)) {};
  #pragma omp parallel firstprivate(c) shared(inp) num_threads(mrcpp_get_num_threads())
      {
-        // MSG_INFO("Adding with grid refinement, loop");
          int nNodes = this->getNEndNodes();
  #pragma omp for schedule(guided)
          for (int n = 0; n < nNodes; n++) {
@@ -702,13 +696,9 @@
              out_node.calcNorms();
          }
      }
-    //  MSG_INFO("Finished adding with grid refinement");
      this->mwTransform(BottomUp);
-    //  MSG_INFO("Finished bottom up transform");
      this->calcSquareNorm();
-    //  MSG_INFO("Finished calculating norm");
      inp.deleteGenerated();
-    //  MSG_INFO("Finished deleting generated nodes");
  }
  
  /** @brief In-place addition of absolute values of MW function representations
@@ -1206,9 +1196,7 @@
  template <> void FunctionTree<3, double>::CopyTreeToComplex(FunctionTree<3, ComplexDouble> *&outTree) {
      delete outTree;
      double ref = 0.0;
-    //  MSG_INFO("start");
      outTree = new FunctionTree<3, ComplexDouble>(this->getMRA());
-    //  MSG_INFO("MRA ok");
      std::vector<MWNode<3, double> *> instack;         // node from this
      std::vector<MWNode<3, ComplexDouble> *> outstack; // node from outTree
      outTree->clearEndNodeTable();
