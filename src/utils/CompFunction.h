@@ -217,8 +217,8 @@ public:
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec = -1.0);
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec = -1.0);
 void save_nodes(CompFunctionVector &Phi, mrcpp::FunctionTree<3, double> &refTree, BankAccount &account, int sizes = -1);
-CompFunctionVector multiply(CompFunctionVector &Phi, RepresentableFunction<3> &f, double prec = -1.0, CompFunction<3> *Func = nullptr, int nrefine = 1, bool all = false);
-CompFunctionVector multiply_one_comp(CompFunctionVector &Phi, RepresentableFunction<3> &f, double prec, CompFunction<3> *Func, int nrefine=0, bool all = false, int comp=0);
+// CompFunctionVector multiply(CompFunctionVector &Phi, RepresentableFunction<3> &f, double prec = -1.0, CompFunction<3> *Func = nullptr, int nrefine = 1, bool all = false);
+// CompFunctionVector multiply_one_comp(CompFunctionVector &Phi, RepresentableFunction<3> &f, double prec, CompFunction<3> *Func, int nrefine=0, bool all = false, int comp=0);
 
 void SetdefaultMRA(MultiResolutionAnalysis<3> *MRA);
 ComplexVector dot(CompFunctionVector &Bra, CompFunctionVector &Ket);
