@@ -1451,6 +1451,17 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
     // size of input is N, size of output is M
     bool serial = mpi::wrk_size == 1; // flag for serial/MPI switch
     int N = Phi.size();
+    for (int i = 0; i < N; i++) {
+        if (Phi[i].isreal()){
+            for (int j = 0; j < Phi[i].Ncomp(); j++) {
+                Phi[i].CompD[j]->CopyTreeToComplex(Phi[i].CompC[j]);
+                delete Phi[i].CompD[j];
+                Phi[i].CompD[j] = nullptr;
+            }
+        }
+        Phi[i].func_ptr->isreal = 0;
+        Phi[i].func_ptr->iscomplex = 1;
+    }
     int M = Psi.size();
     for (int i = 0; i < M; i++) {
         for (int j = 0; j < 4; j++) {
@@ -1763,8 +1774,9 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
  *
  */
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec) { 
-
-    if (Phi[0].iscomplex()) {
+    bool iscomplex = false;
+    for (int i=0; i < Phi.size(); i++) if (Phi[i].iscomplex()) iscomplex=true;
+    if (iscomplex) {
         MSG_INFO("rotate complex");
         rotate_cplx(Phi, U, Psi, prec);
         return;
@@ -2223,11 +2235,15 @@ ComplexMatrix calc_lowdin_matrix_2c(CompFunctionVector &Phi_top, CompFunctionVec
 ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
     int N = BraKet.size();
     ComplexMatrix Stot = ComplexMatrix::Zero(N, N);
-
+    // bool braketisreal = false;
+    //simplest thing to do is to just convert every tree to complex and get rid of the real
     for (int k = 0; k < N; k++) {
         if (BraKet[k].isreal()){
+            // braketisreal = true;
             for (int comp = 0; comp< BraKet[k].Ncomp(); comp++) {
                 BraKet[k].CompD[comp]->CopyTreeToComplex(BraKet[k].CompC[comp]);
+                delete BraKet[k].CompD[comp];
+                BraKet[k].CompD[comp] = nullptr;
             }
             BraKet[k].defcomplex();
             BraKet[k].func_ptr->data.isreal = false;
@@ -2597,20 +2613,37 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
     // MSG_INFO("start");
 
     mrcpp::mpi::barrier(mrcpp::mpi::comm_wrk); // for consistent timings
-    bool braisreal = !Bra[0].iscomplex();
-    bool ketisreal = !Ket[0].iscomplex();
-    if (braisreal or ketisreal) {
-        // temporary solution: copy as complex trees
-        if (braisreal) {
-            for (int i = 0; i < Bra.size(); i++) {
-                Bra[i].CompD[0]->CopyTreeToComplex(Bra[i].CompC[0]);
+
+    bool braisreal = false;
+    bool ketisreal = false;
+    for (int i = 0; i < Bra.size(); i++) if(Bra[i].isreal()) braisreal=true;
+    for (int i = 0; i < Ket.size(); i++) if(Ket[i].isreal()) ketisreal=true;
+    // copy real trees into complex ones, because it is much simpler than keeping tabs on 
+    // which element of bra and ket is real 
+    if (braisreal) {
+        for (int i = 0; i < Bra.size(); i++) {
+            // Bra[i].CompD[0]->CopyTreeToComplex(Bra[i].CompC[0]);
+            if (Bra[i].isreal()){
+                for (int comp = 0; comp< Bra[i].Ncomp(); comp++) {
+                    Bra[i].CompD[comp]->CopyTreeToComplex(Bra[i].CompC[comp]);
+                    delete Bra[i].CompD[comp];
+                    Bra[i].CompD[comp] = nullptr;
+                }
                 Bra[i].func_ptr->iscomplex = 1;
+                Bra[i].func_ptr->isreal = 0; //just in case, to avoid defining the function as both real and complex, even though its real components are not empty
             }
         }
-        if (ketisreal) {
-            for (int i = 0; i < Ket.size(); i++) {
-                Ket[i].CompD[0]->CopyTreeToComplex(Ket[i].CompC[0]);
+    }
+    if (ketisreal) {
+        for (int i = 0; i < Ket.size(); i++) {
+            if (Bra[i].isreal()){
+                for (int comp = 0; comp< Ket[i].Ncomp(); comp++) {
+                    Ket[i].CompD[comp]->CopyTreeToComplex(Ket[i].CompC[comp]);
+                    delete Ket[i].CompD[comp];
+                    Ket[i].CompD[comp] = nullptr;
+                }
                 Ket[i].func_ptr->iscomplex = 1;
+                Ket[i].func_ptr->isreal = 0; //just in case, to avoid defining the function as both real and complex, even though its real components are not empty
             }
         }
     }
@@ -2852,23 +2885,29 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
         Stot += S;
     }
 
+    //THIS IS SEGMENTATION FAULT HELL! If for some reason one element, or worse, one component, 
+    // of bra/ket is real but not the rest we simply nuke it for no reason
     // restore input
-    if (braisreal) {
-        for (int i = 0; i < Bra.size(); i++) {
-            delete Bra[i].CompC[0];
-            Bra[i].CompC[0] = nullptr;
-            Bra[i].func_ptr->iscomplex = 0;
-            Bra[i].func_ptr->isreal = 1;
-        }
-    }
-    if (ketisreal) {
-        for (int i = 0; i < Ket.size(); i++) {
-            delete Ket[i].CompC[0];
-            Ket[i].CompC[0] = nullptr;
-            Ket[i].func_ptr->iscomplex = 0;
-            Ket[i].func_ptr->isreal = 1;
-        }
-    }
+    // if (braisreal) {
+    //     for (int i = 0; i < Bra.size(); i++) {
+    //         for (int comp = 0; comp< Bra[k].Ncomp(); comp++) {
+    //             delete Bra[i].CompC[comp];
+    //             Bra[i].CompC[comp] = nullptr;
+    //         }
+    //         Bra[i].func_ptr->iscomplex = 0;
+    //         Bra[i].func_ptr->isreal = 1;
+    //     }
+    // }
+    // if (ketisreal) {
+    //     for (int i = 0; i < Ket.size(); i++) {
+    //         for (int comp = 0; comp< Ket[k].Ncomp(); comp++) {
+    //             delete Ket[i].CompC[comp];
+    //             Ket[i].CompC[comp] = nullptr;
+    //         }
+    //         Ket[i].func_ptr->iscomplex = 0;
+    //         Ket[i].func_ptr->isreal = 1;
+    //     }
+    // }
     return Stot;
 }
 
