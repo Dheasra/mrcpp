@@ -245,55 +245,63 @@ template <int D, typename T> void copy_grid(FunctionTree<D, T> &out, FunctionTre
  *
  */
 template <int D> void copy_grid(CompFunction<D> &out, CompFunction<D> &inp, int n_comp) {
-    // MSG_INFO("Copy grid start "<< n_comp << " before alloc "<< &(out.CompD[0]->getMRA()) << " § " << out.Ncomp());
-    //keeping track of out being real or not 
-    bool outreal = out.isreal();
-    bool outcomplex = out.iscomplex();
     out.free();
-    //provision in case 
-    if (not outreal and not outcomplex) out.func_ptr->data = inp.func_ptr->data; 
-    // out.func_ptr->data = inp.func_ptr->data; //test debug
+    out.func_ptr->data = inp.func_ptr->data;
+    out.alloc(inp.Ncomp());
+    for (int i = 0; i < inp.Ncomp(); i++) {
+        if (inp.isreal()) build_grid(*out.CompD[i], *inp.CompD[i]);
+        if (inp.iscomplex()) build_grid(*out.CompC[i], *inp.CompC[i]);
+    }
 
-    if (n_comp < 0) {
-        n_comp = inp.Ncomp();
-    } else {
-        //if n_comp is not supposed to be the input's Ncomp, then we set out's number of components to n_comp
-        out.func_ptr->data.Ncomp = n_comp; 
-    }
-    //Restoring out's number field for allocation
-    if (outreal or outcomplex){
-        out.func_ptr->data.isreal = outreal; 
-        out.func_ptr->data.iscomplex = outcomplex; 
-    }
-    // MSG_INFO("before alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
-    // MSG_INFO("mid inp complex = " << inp.iscomplex() << "out real= "<< out.isreal() << "out complex= "<< out.iscomplex());
-    out.alloc(n_comp, false);
-    // out.alloc_comp(n_comp);
-    // MSG_INFO("after alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
-    for (int i = 0; i < std::max(n_comp, 1); i++) {//TODO: résoudre
-        // MSG_INFO("Copying grid of component " << i << " real?= "<< inp.isreal() << " " << &(out.CompD[i]->getMRA()) << " " << &(inp.CompD[i]->getMRA()));
-        // if (inp.isreal()) build_grid(*out.CompD[i], *inp.CompD[i]); //original
-        // if (inp.iscomplex()) build_grid(*out.CompC[i], *inp.CompC[i]); //original
+    // // MSG_INFO("Copy grid start "<< n_comp << " before alloc "<< &(out.CompD[0]->getMRA()) << " § " << out.Ncomp());
+    // //keeping track of out being real or not 
+    // bool outreal = out.isreal();
+    // bool outcomplex = out.iscomplex();
+    // out.free();
+    // //provision in case 
+    // if (not outreal and not outcomplex) out.func_ptr->data = inp.func_ptr->data; 
+    // // out.func_ptr->data = inp.func_ptr->data; //test debug
 
-        // Hacky debug solution (?) start
-        if (inp.isreal() and out.isreal()) build_grid(*out.CompD[i], *inp.CompD[i]); 
-        if (inp.iscomplex() and out.iscomplex()) build_grid(*out.CompC[i], *inp.CompC[i]); 
-        if (inp.isreal() and out.iscomplex()) {
-            // MSG_INFO("tut inp real out complex");
-            // FunctionTree<D> inp_copy;
-            inp.CompD[i]->CopyTreeToComplex(inp.CompC[i]);
-            build_grid(*out.CompC[i], *inp.CompC[i]);
-            delete inp.CompC[i];
-        }
-        if (inp.iscomplex() and out.isreal()) {
-            // MSG_INFO("tut inp complex out real");
-            // FunctionTree<D> inp_copy;
-            inp.CompC[i]->CopyTreeToReal(inp.CompD[i]);
-            build_grid(*out.CompD[i], *inp.CompD[i]);
-            delete inp.CompD[i];
-        }
-        // Hacky debug solution (?) end
-    }
+    // if (n_comp < 0) {
+    //     n_comp = inp.Ncomp();
+    // } else {
+    //     //if n_comp is not supposed to be the input's Ncomp, then we set out's number of components to n_comp
+    //     out.func_ptr->data.Ncomp = n_comp; 
+    // }
+    // //Restoring out's number field for allocation
+    // if (outreal or outcomplex){
+    //     out.func_ptr->data.isreal = outreal; 
+    //     out.func_ptr->data.iscomplex = outcomplex; 
+    // }
+    // // MSG_INFO("before alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
+    // // MSG_INFO("mid inp complex = " << inp.iscomplex() << "out real= "<< out.isreal() << "out complex= "<< out.iscomplex());
+    // out.alloc(n_comp, false);
+    // // out.alloc_comp(n_comp);
+    // // MSG_INFO("after alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
+    // for (int i = 0; i < std::max(n_comp, 1); i++) {//TODO: résoudre
+    //     // MSG_INFO("Copying grid of component " << i << " real?= "<< inp.isreal() << " " << &(out.CompD[i]->getMRA()) << " " << &(inp.CompD[i]->getMRA()));
+    //     // if (inp.isreal()) build_grid(*out.CompD[i], *inp.CompD[i]); //original
+    //     // if (inp.iscomplex()) build_grid(*out.CompC[i], *inp.CompC[i]); //original
+
+    //     // Hacky debug solution (?) start
+    //     if (inp.isreal() and out.isreal()) build_grid(*out.CompD[i], *inp.CompD[i]); 
+    //     if (inp.iscomplex() and out.iscomplex()) build_grid(*out.CompC[i], *inp.CompC[i]); 
+    //     if (inp.isreal() and out.iscomplex()) {
+    //         // MSG_INFO("tut inp real out complex");
+    //         // FunctionTree<D> inp_copy;
+    //         inp.CompD[i]->CopyTreeToComplex(inp.CompC[i]);
+    //         build_grid(*out.CompC[i], *inp.CompC[i]);
+    //         delete inp.CompC[i];
+    //     }
+    //     if (inp.iscomplex() and out.isreal()) {
+    //         // MSG_INFO("tut inp complex out real");
+    //         // FunctionTree<D> inp_copy;
+    //         inp.CompC[i]->CopyTreeToReal(inp.CompD[i]);
+    //         build_grid(*out.CompD[i], *inp.CompD[i]);
+    //         delete inp.CompD[i];
+    //     }
+    //     // Hacky debug solution (?) end
+    // }
 }
 
 /** @brief Clear the MW coefficients of a function representation

@@ -457,13 +457,13 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
         alloc(inp.Ncomp(), false);
     }
 
-    // MSG_INFO("debug bbbb");
+    MSG_INFO("debug bbbb");
 
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (this->isreal() and inp.isreal() and std::abs(c.imag()) < MachineZero) {
             CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
         } else {
-            // MSG_INFO("imma be complex inplace" << i << " is inp complex"<< inp.iscomplex());
+            MSG_INFO("imma be complex inplace" << i << " is inp complex"<< inp.iscomplex());
             if (this->isreal()) {
                 for (int comp = 0; comp < this->Ncomp(); comp++){
                     // MSG_INFO("tututututut=" << this->Ncomp());
@@ -476,12 +476,12 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
                 func_ptr->isreal = false;
             }
             if (inp.isreal()) { //provision in case inp is real and c is not
-                // MSG_INFO("tutututututinp");
+                MSG_INFO("tutututututinp");
                 inp.CompD[i]->CopyTreeToComplex(inp.CompC[i]);
             }
-            // MSG_INFO("tututututut 6"<< inp.CompC[i]);
+            MSG_INFO("tututututut 6"<< inp.CompC[i]);
             CompC[i]->add_inplace(c, *inp.CompC[i]);
-            // MSG_INFO("tututututut 7");
+            MSG_INFO("tututututut 7");
             if (inp.isreal()){ //restoring inp to what is was
                 delete inp.CompC[i];
                 inp.CompC[i] = nullptr;
@@ -582,10 +582,13 @@ template <int D> void deep_copy(CompFunction<D> *out, const CompFunction<D> &inp
  * Deep copy: meta func_ptr->data is copied along with the content of each component.
  */
 template <int D> void deep_copy(CompFunction<D> &out, const CompFunction<D> &inp) {
+    MSG_INFO("start");
     out.func_ptr->data = inp.func_ptr->data;
     out.alloc(inp.Ncomp());
     if (inp.getNNodes() == 0) return;
     for (int i = 0; i < inp.Ncomp(); i++) {
+        MSG_INFO("comp ="<< i<< " inp_real="<< inp.isreal()<< " out_real="<<out.isreal()<< " inp_complex="<< inp.iscomplex()<< " out_complex="<<out.iscomplex());
+        // MSG_INFO("comp ="<< i<< " inp_complex="<< inp.iscomplex()<< " out_complex="<<out.iscomplex());
         if (inp.isreal()) {
             inp.CompD[i]->deep_copy(out.CompD[i]);
         } else {
@@ -1632,11 +1635,12 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
                         else
                             split_serial(orbiVec[i], n) = 0;
                     } else {
-                        #pragma omp critical //preventive construct to avoid race conditions, because it appears in the if statement so might as well copy it here? 
+    #pragma omp critical //preventive construct to avoid race conditions, because it appears in the if statement so might as well copy it here? 
                         ix2coef[orbiVec[i]][node_ix] = max_n + 1; // should not be used
                         split_serial(orbiVec[i], n) = 0;          // do not split if parent does not need to be split
                     }
                 }
+    #pragma omp flush //preventive construct to avoid race conditions (useless?)
                 nodeReady[n] = 1;
     #pragma omp critical
                 {
@@ -1955,6 +1959,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                         split_serial(orbiVec[i], n) = 0;          // do not split if parent does not need to be split
                     }
                 }
+        #pragma omp flush //preventive construct to avoid race conditions (useless?)
                 nodeReady[n] = 1;
         #pragma omp critical
                 {
@@ -2049,7 +2054,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 if (coeffpVec[j].size() == 0) continue;
                 // std::cout << "reconstructing orbital " << j << " comp=" << q << std::endl;
                 // Psi[j].alloc(1);
-                Psi[j].alloc_comp(q, false); //possible issue (multithreading)
+                Psi[j].alloc_comp(q, false); //possible issue (multithreading) but maybe safe since no MPI here? 
                 Psi[j].real(q).clear();
                 Psi[j].real(q).makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
             }
@@ -2090,23 +2095,23 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
 }
 
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec) {
-    // CompFunctionVector Psi(0);
-    // MSG_INFO("rotate new");
-    // for (int i = 0; i < Phi.size(); i++){
-    //     MSG_INFO("test rotate new 1 "<< i);
-    //     auto testut1 = Phi[i].func_ptr->data;
-    //     MSG_INFO("Test rotate new 2 "<< i);
-    //     CompFunction<3> psi_tmp(Phi[i].func_ptr->data, false); 
-    //     MSG_INFO("test 3"<< i);
-    //     deep_copy(psi_tmp, Phi[i]); //make sure it is a separate object
-    //     MSG_INFO("test 4");
-    //     Psi.push_back(psi_tmp);
-    //     // deep_copy(Psi[i],Phi[i]);
-    //     MSG_INFO("orb finished"<< i);
-    // }
-    // MSG_INFO("rotate new finished");
-    // rotate(Psi, U, Phi, prec); 
-    rotate(Phi, U, Phi, prec); 
+    CompFunctionVector Psi(0);
+    MSG_INFO("rotate new");
+    for (int i = 0; i < Phi.size(); i++){
+        MSG_INFO("test rotate new 1 "<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
+        auto testut1 = Phi[i].func_ptr->data;
+        MSG_INFO("Test rotate new 2 "<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
+        CompFunction<3> psi_tmp(Phi[i].func_ptr->data, false); 
+        MSG_INFO("test 3"<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
+        deep_copy(psi_tmp, Phi[i]); //make sure it is a separate object
+        MSG_INFO("test 4" << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
+        Psi.push_back(psi_tmp);
+        // deep_copy(Psi[i],Phi[i]);
+        MSG_INFO("orb finished"<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
+    }
+    MSG_INFO("rotate new finished");
+    rotate(Psi, U, Phi, prec); 
+    // rotate(Phi, U, Phi, prec); 
     return;
 }
 
