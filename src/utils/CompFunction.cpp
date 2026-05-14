@@ -2393,9 +2393,7 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &BraKet) {
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) { S(i, j) *= std::conj(Fac[i]) * Fac[j]; }
         }
-        // #pragma omp critical //test debug test
         Stot += S;
-        // #pragma omp barrier //test debug test
     }
 
     return Stot;
@@ -2586,9 +2584,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) { S(i, j) *= std::conj(Fac[i]) * Fac[j]; }
         }
-        #pragma omp critical //test debug test
         Stot += S;
-        #pragma omp barrier //test debug test
     }
     return Stot;
 }
@@ -2853,9 +2849,7 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < M; j++) { S(i, j) *= std::conj(FacBra[i]) * FacKet[j]; }
         }
-        // #pragma omp critical //test debug test
         Stot += S;
-        // #pragma omp barrier //test debug test
     }
 
     // restore input
