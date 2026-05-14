@@ -460,7 +460,7 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
     // MSG_INFO("debug bbbb");
 
     for (int i = 0; i < inp.Ncomp(); i++) {
-        if (this->isreal() and inp.isreal() and c.imag() < MachineZero) {
+        if (this->isreal() and inp.isreal() and std::abs(c.imag()) < MachineZero) {
             CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
         } else {
             // MSG_INFO("imma be complex inplace" << i << " is inp complex"<< inp.iscomplex());
@@ -644,7 +644,7 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
     out.func_ptr->data.shared = share; // we don' inherit the shareness
     bool iscomplex = false;
     for (int i = 0; i < inp.size(); i++)
-        if (inp[i].iscomplex() or c[i].imag() > MachineZero) iscomplex = true;
+        if (inp[i].iscomplex() or std::abs(c[i].imag()) > MachineZero) iscomplex = true;
     if (iscomplex) {
         out.func_ptr->data.iscomplex = 1;
         out.func_ptr->data.isreal = 0;
@@ -711,32 +711,69 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
  */
 void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec) {
     //compute the density of each component of inp individually
-    CompFunction<3> out_tmp(1, inp.Ncomp());
-    out_tmp.func_ptr->data = inp.func_ptr->data; 
-    out_tmp.alloc(inp.Ncomp(), true);
-    multiply(prec, out_tmp, 1.0, inp, inp, -1, false, false, true);//todo: allouer les composantes de out avant de les ajouter ensemble
+    CompFunction<3> component_density(1, inp.Ncomp());
+    component_density.func_ptr->data = inp.func_ptr->data; 
+    component_density.alloc(inp.Ncomp(), true);
+    multiply(prec, component_density, 1.0, inp, inp, -1, false, false, true);//todo: allouer les composantes de out avant de les ajouter ensemble
     
-    //collect each component's density into out's first (and only) component
-    for (int i = 0; i < out.Ncomp(); i++) {
+    //collect each component's density into a temporary density, which could be defined complex for the purpose of conversion.
+    CompFunction<3> rho_tmp(1, 1); //one component CompFunction
+    //define rho_tmp as same number field as input for allocation
+    if (inp.isreal()) {
+        MSG_INFO("real");
+        rho_tmp.defreal();
+        rho_tmp.func_ptr->data.iscomplex = 0;
+    }
+    if (inp.iscomplex()) {
+        MSG_INFO("complex");
+        rho_tmp.defcomplex();
+        rho_tmp.func_ptr->data.isreal = 0;
+    }
+    if (rho_tmp.isreal() and rho_tmp.iscomplex()) MSG_ABORT("INPUT IS BOTH REAL AND COMPLEX; ERROR");
+    rho_tmp.alloc(1, true);
+    for (int i = 0; i < inp.Ncomp(); i++) {
         if (not inp.iscomplex()){
-            add(prec, *out.CompD[0], 1.0, *out.CompD[0], 1.0, *out_tmp.CompD[i], false, false, false);
+            // add(prec, *rho_tmp.CompD[0], 1.0, *rho_tmp.CompD[0], 1.0, *component_density.CompD[i], false, false, false);
+            rho_tmp.CompD[0]->add_inplace(1.0, *component_density.CompD[i]);
         } else {
-            ComplexDouble one = (1.0, 0.0);
-            add(prec, *out.CompC[0], one, *out.CompC[0], one, *out_tmp.CompC[i], false, false, false);
+            // add(prec, *rho_tmp.CompC[0], {1.0,0.0}, *rho_tmp.CompC[0], {1.0,0.0}, *component_density.CompC[i], false, false, false);
+            rho_tmp.CompC[0]->add_inplace({1.0, 0.0}, *component_density.CompC[i]);
         }
     }
-
-    if (out_tmp.iscomplex()) {
-        // copy onto real components
-        for (int i = 0; i < out.Ncomp(); i++) {
-            out.CompD[i] = out.CompC[i]->Real();
-            // delete out.CompD[i];
-            delete out.CompC[i];
-            out.CompC[i] = nullptr; 
-        }
-        out.func_ptr->isreal = 1;
-        out.func_ptr->iscomplex = 0;
+    MSG_INFO("output is real="<< out.isreal()<< ", is complex="<< out.iscomplex());
+    //making sure that out is real and clear the rest
+    // out.defreal();
+    // out.func_ptr->data.iscomplex = 0;
+    // out.alloc(1, false);
+    MSG_INFO("Collected");
+    if (rho_tmp.iscomplex()) {
+        // copy onto out's real component
+        // out.CompD[0] = rho_tmp.CompC[0]->Real();
+        MSG_INFO("complex copying 1");
+        rho_tmp.CompC[0]->Real()->deep_copy(out.CompD[0]);
+        MSG_INFO("complex copying 2");
+        delete rho_tmp.CompC[0];
+        MSG_INFO("complex copying 3");
+        rho_tmp.CompC[0] = nullptr;
+        MSG_INFO("complex copying 4");
+        //     out.CompC[i] = nullptr; 
+        // for (int i = 0; i < out.Ncomp(); i++) {
+        //     out.CompD[i] = out.CompC[i]->Real();
+        //     // delete out.CompD[i];
+        //     delete out.CompC[i];
+        //     out.CompC[i] = nullptr; 
+        // }
+        out.defreal();
+        // out.func_ptr->isreal = 1;
+        // out.func_ptr->iscomplex = 0;
+    } else {
+        MSG_INFO("real copying");
+        //deep copy rho_tmp's value into out
+        rho_tmp.CompD[0]->deep_copy(out.CompD[0]);
+        delete rho_tmp.CompD[0];
+        rho_tmp.CompD[0] = nullptr;
     }
+    MSG_INFO("made density");
 }
 
 
@@ -1416,21 +1453,28 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
     int N = Phi.size();
     int M = Psi.size();
     for (int i = 0; i < M; i++) {
-        for (int j = 0; j < 4; j++) delete Psi[i].CompD[j];
+        for (int j = 0; j < 4; j++) {
+            if (Psi[i].CompD[j] != nullptr){
+                delete Psi[i].CompD[j];
+                Psi[i].CompD[j] = nullptr;
+            }
+        }
         Psi[i].func_ptr->isreal = 0;
         Psi[i].func_ptr->iscomplex = 1;
     }
+    MSG_INFO("passed cleaning psi compD");
+
     for (int i = 0; i < N; i++) {
         if (Phi[i].func_ptr->conj) MSG_ABORT("Conjugaison not implemented for rotations");
     }
     if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
     if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
 
-    // #pragma omp parallel for schedule(static) //test debug test multithreading (Seems to work?)
+    MSG_INFO("passed aborts");
     for (int q = 0; q < Phi[0].Ncomp(); q++) {    
         // 1) make union tree without coefficients. Note that the ref tree is always real (in fact it has no coeff)
         FunctionTree<3> refTree(*Phi.vecMRA);
-        mpi::allreduce_Tree_noCoeff(refTree, Phi, mpi::comm_wrk);
+        mpi::allreduce_Tree_noCoeff(refTree, Phi, mpi::comm_wrk, q);
 
         int sizecoeff = (1 << refTree.getDim()) * refTree.getKp1_d();
         int sizecoeffW = ((1 << refTree.getDim()) - 1) * refTree.getKp1_d();
@@ -1484,7 +1528,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
             save_nodes(Phi, refTree, nodesPhi);
             mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
         }
-
+        MSG_INFO("pre maps");
         // 4) rotate all the nodes
         IntMatrix split_serial;                                 // in the serial case all split are stored in one array
         std::vector<std::vector<ComplexDouble *>> coeffpVec(M); // to put pointers to the rotated coefficient for each orbital in serial case
@@ -1492,6 +1536,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
         int csize;                                              // size of the current coefficients (different for roots and branches)
         std::vector<ComplexMatrix> rotatedCoeffVec;             // just to ensure that the data from rotatedCoeff is not deleted, since we point to it.
                                                                 // j indices are for unrotated orbitals, i indices are for rotated orbitals
+        MSG_INFO("pre serial");
         if (serial) {
             std::map<int, int> ix2coef_ref; // to find the index n corresponding to a serialIx
             split_serial.resize(M, max_n);  // not use in the MPI case
@@ -1504,6 +1549,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
                                                 // assumes the nodes are ordered such that parent are treated before children. BFS or DFS ok.
                                                 // NB: the n must be traversed approximately in right order: Thread n may have to wait until som other preceding
                                                 // n is finished.
+            MSG_INFO("pre multithreading 1");
     #pragma omp parallel for schedule(dynamic)
             for (int n = 0; n < max_n; n++) {
                 int csize;
@@ -1654,7 +1700,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
             }
             mpi::barrier(mpi::comm_wrk); // wait until all rotated nodes are ready
         }
-
+        MSG_INFO("post multithreading 1");
         // 5) reconstruct trees using rotated nodes.
 
         // only serial case can use OMP, because MPI cannot be used by threads
@@ -1705,7 +1751,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
             }
         }
     }
-    #pragma omp barrier //test debug test
+    
 }
 
 /** @brief Make a linear combination of functions
@@ -1719,9 +1765,11 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec) { 
 
     if (Phi[0].iscomplex()) {
+        MSG_INFO("rotate complex");
         rotate_cplx(Phi, U, Psi, prec);
         return;
     }
+    MSG_INFO("rotate real");
 
     // MSG_INFO("Rotation matrix ");
     // for (int a = 0; a < U.rows(); a++) {
@@ -2026,12 +2074,27 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 pointerstodelete.clear();
             }
         }
-    // #pragma omp barrier //test debug test
     }
 }
 
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec) {
-    rotate(Phi, U, Phi, prec);
+    // CompFunctionVector Psi(0);
+    // MSG_INFO("rotate new");
+    // for (int i = 0; i < Phi.size(); i++){
+    //     MSG_INFO("test rotate new 1 "<< i);
+    //     auto testut1 = Phi[i].func_ptr->data;
+    //     MSG_INFO("Test rotate new 2 "<< i);
+    //     CompFunction<3> psi_tmp(Phi[i].func_ptr->data, false); 
+    //     MSG_INFO("test 3"<< i);
+    //     deep_copy(psi_tmp, Phi[i]); //make sure it is a separate object
+    //     MSG_INFO("test 4");
+    //     Psi.push_back(psi_tmp);
+    //     // deep_copy(Psi[i],Phi[i]);
+    //     MSG_INFO("orb finished"<< i);
+    // }
+    // MSG_INFO("rotate new finished");
+    // rotate(Psi, U, Phi, prec); 
+    rotate(Phi, U, Phi, prec); 
     return;
 }
 

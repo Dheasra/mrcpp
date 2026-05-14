@@ -246,31 +246,28 @@ template <int D, typename T> void copy_grid(FunctionTree<D, T> &out, FunctionTre
  */
 template <int D> void copy_grid(CompFunction<D> &out, CompFunction<D> &inp, int n_comp) {
     // MSG_INFO("Copy grid start "<< n_comp << " before alloc "<< &(out.CompD[0]->getMRA()) << " § " << out.Ncomp());
+    //keeping track of out being real or not 
+    bool outreal = out.isreal();
+    bool outcomplex = out.iscomplex();
     out.free();
-    // MSG_INFO("Start inp complex = " << inp.iscomplex() << "out real= "<< out.isreal() << "out complex= "<< out.iscomplex());
-    //Hacky debug solution part 1 start
-    // bool out_isreal = out.isreal(); //keep track of out's number field, as it might be different from inp's.
-    //Hacky debug solution part 1 end
-    out.func_ptr->data = inp.func_ptr->data; 
-    //Hacky debug solution part 2 start
-    // if (out_isreal and inp.iscomplex()) { //restore out's number field if it was real, since we copied the data from inp which is complex, and we want to keep out's original number field
-    //     MSG_INFO("out real restored");
-    //     out.defreal();
-    //     out.func_ptr->data.iscomplex = 0;
-    // } else if (!out_isreal and inp.isreal()){
-    //     out.defcomplex();
-    //     out.func_ptr->data.isreal = 0;
-    // }
-    //Hacky debug solution part 2 end
+    //provision in case 
+    if (not outreal and not outcomplex) out.func_ptr->data = inp.func_ptr->data; 
+    // out.func_ptr->data = inp.func_ptr->data; //test debug
+
     if (n_comp < 0) {
         n_comp = inp.Ncomp();
     } else {
         //if n_comp is not supposed to be the input's Ncomp, then we set out's number of components to n_comp
         out.func_ptr->data.Ncomp = n_comp; 
     }
+    //Restoring out's number field for allocation
+    if (outreal or outcomplex){
+        out.func_ptr->data.isreal = outreal; 
+        out.func_ptr->data.iscomplex = outcomplex; 
+    }
     // MSG_INFO("before alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
     // MSG_INFO("mid inp complex = " << inp.iscomplex() << "out real= "<< out.isreal() << "out complex= "<< out.iscomplex());
-    out.alloc(n_comp+1, false);
+    out.alloc(n_comp, false);
     // out.alloc_comp(n_comp);
     // MSG_INFO("after alloc "<< &(out.CompD[0]->getMRA()) << " ! " << out.Ncomp());
     for (int i = 0; i < std::max(n_comp, 1); i++) {//TODO: résoudre

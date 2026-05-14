@@ -502,12 +502,18 @@ template <typename T> void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, T> &tre
 }
 
 /** @brief make union tree without coeff and send to all
+ * AI description of this function's goal:  
+ * Its job is to build a union grid — a FunctionTree topology with no coefficients — that covers every grid point that exists in any orbital in the input vector Phi. In MPI mode it does this in three steps: each rank contributes the
+ * nodes it owns, rank 0 collects them all (reduce), then broadcasts the merged result back to everyone.
+ * 
+ * @param comp: component index to generate the grid from
  */
-template <typename T> void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, T> &tree, vector<CompFunction<3>> &Phi, MPI_Comm comm) {
+template <typename T> void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, T> &tree, vector<CompFunction<3>> &Phi, MPI_Comm comm, int comp) {
     /* 1) make union grid of own orbitals
        2) make union grid with others orbitals (sent to rank zero)
        3) rank zero broadcast func to everybody
      */
+    if (comp<0 or comp>3) comp = 0;
 
      int N = Phi.size();
     //  MSG_INFO("start size=" << N)
@@ -515,9 +521,11 @@ template <typename T> void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, T> &tre
         // MSG_INFO("loop " << j <<  " || is real? " << Phi[j].isreal() << " || real exists? " << &Phi[j].CompD[0] << " "<< &Phi[j].CompD[1] <<  " || is complex? " << Phi[j].iscomplex() << " || complex exists? " << &Phi[j].CompC[0] << " "<< &Phi[j].CompC[1])
         if (not my_func(j)) continue;
         // MSG_INFO("bim")
-        if (Phi[j].isreal()) tree.appendTreeNoCoeff(*Phi[j].CompD[0]);
+        // if (Phi[j].isreal()) tree.appendTreeNoCoeff(*Phi[j].CompD[0]);
+        if (Phi[j].isreal() and Phi[j].CompD[comp]!=nullptr) tree.appendTreeNoCoeff(*Phi[j].CompD[comp]); //WARNING: It might be worth updating to generate the grid from other components
         // MSG_INFO("tut")
-        if (Phi[j].iscomplex()) tree.appendTreeNoCoeff(*Phi[j].CompC[0]);
+        // if (Phi[j].iscomplex()) tree.appendTreeNoCoeff(*Phi[j].CompC[0]);
+        if (Phi[j].iscomplex() and Phi[j].CompC[comp]!=nullptr) tree.appendTreeNoCoeff(*Phi[j].CompC[comp]);
     }
     // MSG_INFO("Mid")
 #ifdef MRCPP_HAS_MPI
@@ -594,12 +602,12 @@ template <typename T> void broadcast_Tree_noCoeff(mrcpp::FunctionTree<3, T> &tre
 template void reduce_Tree_noCoeff(mrcpp::FunctionTree<3, double> &tree, MPI_Comm comm);
 template void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, double> &tree, std::vector<FunctionTree<3, double>> &Phi, MPI_Comm comm);
 template void broadcast_Tree_noCoeff(mrcpp::FunctionTree<3, double> &tree, MPI_Comm comm);
-template void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, double> &tree, std::vector<CompFunction<3>> &Phi, MPI_Comm comm);
+template void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, double> &tree, std::vector<CompFunction<3>> &Phi, MPI_Comm comm, int comp=0);
 
 template void reduce_Tree_noCoeff(mrcpp::FunctionTree<3, ComplexDouble> &tree, MPI_Comm comm);
 template void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, ComplexDouble> &tree, std::vector<FunctionTree<3, ComplexDouble>> &Phi, MPI_Comm comm);
 template void broadcast_Tree_noCoeff(mrcpp::FunctionTree<3, ComplexDouble> &tree, MPI_Comm comm);
-template void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, ComplexDouble> &tree, std::vector<CompFunction<3>> &Phi, MPI_Comm comm);
+template void allreduce_Tree_noCoeff(mrcpp::FunctionTree<3, ComplexDouble> &tree, std::vector<CompFunction<3>> &Phi, MPI_Comm comm, int comp=0);
 
 } // namespace mpi
 } // namespace mrcpp

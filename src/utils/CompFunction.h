@@ -128,8 +128,8 @@ public:
     int conj() const { return func_ptr->data.conj; }           // soft conjugate
     int isreal() const { return func_ptr->data.isreal; }       // T=double
     int iscomplex() const { return func_ptr->data.iscomplex; } // T=DoubleComplex
-    void defreal() { func_ptr->data.isreal = 1; }              // define as real
-    void defcomplex() { func_ptr->data.iscomplex = 1; }        // define as complex
+    void defreal() { func_ptr->data.isreal = 1;}// func_ptr->data.iscomplex = 0; }              // define as real
+    void defcomplex() { func_ptr->data.iscomplex = 1;}// func_ptr->data.isreal = 0;}        // define as complex
     int share() const { return func_ptr->data.shared; }
     int *Nchunks() const { return func_ptr->data.Nchunks; } // number of chunks of each component tree
 
