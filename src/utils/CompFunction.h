@@ -128,13 +128,25 @@ public:
     int conj() const { return func_ptr->data.conj; }           // soft conjugate
     int isreal() const { return func_ptr->data.isreal; }       // T=double
     int iscomplex() const { return func_ptr->data.iscomplex; } // T=DoubleComplex
-    void defreal() { func_ptr->data.isreal = 1;}// func_ptr->data.iscomplex = 0; }              // define as real
-    void defcomplex() { func_ptr->data.iscomplex = 1;}// func_ptr->data.isreal = 0;}        // define as complex
+    void defreal() { func_ptr->data.isreal = 1;                // define as real
+                     func_ptr->data.iscomplex = 0;}
+    void defcomplex() { func_ptr->data.isreal = 0;             // define as complex
+                        func_ptr->data.iscomplex = 1;}
     int share() const { return func_ptr->data.shared; }
     int *Nchunks() const { return func_ptr->data.Nchunks; } // number of chunks of each component tree
+    ComplexDouble getFac() const { return func_ptr->data.c1[0]; } // returns the overall multiplicative factor
+    void setFac(ComplexDouble fac) { func_ptr->data.c1[0] = fac; } // sets the overall multiplicative factor
 
     CompFunction paramCopy(bool alloc = false) const;
     ComplexDouble integrate() const;
+
+    /**
+     * @brief Integrate over half of the space
+     * @param dim Dimension along which to split
+     * @param positiveSide If true, integrate over the positive side (x>0 if dim=0)
+     * @return Resulting integral
+     */
+    ComplexDouble integrateSide(int dim, bool positiveSide) const;  //LUCA: This should rather become a utility function instead of being a member function, as it is not required for the "exsistence" of the CompFunction, but only a specific operation on it. 
     double norm() const;
     double getSquareNorm() const;
     void calcSquareNorm();
@@ -147,7 +159,7 @@ public:
     const int getRank() const { return func_ptr->rank; };
     void add(ComplexDouble c, CompFunction<D> inp);
 
-    int crop(double prec);
+    int crop(double prec, bool absPrec = true);
     void rescale(ComplexDouble c);
     void free();
     int getSizeNodes() const;
@@ -176,34 +188,48 @@ template <int D> void CopyToComplex(CompFunction<D> &out, const CompFunction<D> 
 template <int D> void deep_copy(CompFunction<D> *out, const CompFunction<D> &inp);
 // void CopyToComplex(CompFunction<3> &out, const CompFunction<3> &inp);
 template <int D> void deep_copy(CompFunction<D> &out, const CompFunction<D> &inp);
-template <int D> void add(CompFunction<D> &out, ComplexDouble a, CompFunction<D> inp_a, ComplexDouble b, CompFunction<D> inp_b, double prec, bool conjugate = false);
-template <int D> void linear_combination(CompFunction<D> &out, const std::vector<ComplexDouble> &c, std::vector<CompFunction<D>> &inp, double prec, bool conjugate = false);
-template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, CompFunction<D> inp_b, double prec, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
-template <int D> void multiply(double prec, CompFunction<D> &out, double coef, CompFunction<D> inp_a, CompFunction<D> inp_b, int maxIter = -1, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
-template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, CompFunction<D> inp_b, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
-template <int D> void multiply(CompFunction<D> &out, CompFunction<D> &inp_a, RepresentableFunction<D, double> &f, double prec, int nrefine = 0, bool conjugate = false);
-template <int D> void multiply(CompFunction<D> &out, CompFunction<D> &inp_a, RepresentableFunction<D, ComplexDouble> &f, double prec, int nrefine = 0, bool conjugate = false);
-template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, double> &inp_a, RepresentableFunction<D, double> &f, double prec, int nrefine = 0, bool conjugate = false);
-template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDouble> &inp_a, RepresentableFunction<D, ComplexDouble> &f, double prec, int nrefine = 0, bool conjugate = false);
-//multiplication rules for Potentials on spinorr or other exclusively single component functions with CompFunctions
+template <int D> void add(CompFunction<D> &out, ComplexDouble a, 
+                          CompFunction<D> inp_a, ComplexDouble b, 
+                          CompFunction<D> inp_b, double prec, bool conjugate = false);
+template <int D> void linear_combination(CompFunction<D> &out, const std::vector<ComplexDouble> &c, 
+                                         std::vector<CompFunction<D>> &inp, double prec, bool conjugate = false);
+template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, CompFunction<D> inp_b, 
+                               double prec, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
+template <int D> void multiply(double prec, CompFunction<D> &out, double coef, CompFunction<D> inp_a, 
+                               CompFunction<D> inp_b, int maxIter = -1, bool absPrec = false, bool useMaxNorms = false, 
+                               bool conjugate = false);
+template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a,
+                               CompFunction<D> inp_b, bool absPrec = false, 
+                               bool useMaxNorms = false, bool conjugate = false);
+template <int D> void multiply(CompFunction<D> &out, CompFunction<D> &inp_a, 
+                               RepresentableFunction<D, double> &f, double prec, 
+                               int nrefine = 0, bool conjugate = false);
+template <int D> void multiply(CompFunction<D> &out, CompFunction<D> &inp_a, 
+                               RepresentableFunction<D, ComplexDouble> &f, 
+                               double prec, int nrefine = 0, bool conjugate = false);
+template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, double> &inp_a, 
+                               RepresentableFunction<D, double> &f, double prec, int nrefine = 0, 
+                               bool conjugate = false);
+template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDouble> &inp_a, 
+                               RepresentableFunction<D, ComplexDouble> &f, double prec, int nrefine = 0, 
+                               bool conjugate = false);
+template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec);
+//multiplication rules for Potentials on spinors or other exclusively single component functions with CompFunctions
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, double> &inp_b, double prec, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, ComplexDouble> &inp_b, double prec, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
-template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunction<D> &ket);
-// template <int D> ComplexDouble dot(CompFunction<D> &bra, CompFunction<D> &ket);
+template <int D> ComplexDouble dot(const CompFunction<D> &bra,const CompFunction<D> &ket);
 template <int D> double node_norm_dot(CompFunction<D> bra, CompFunction<D> ket);
-void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec, int comp = 0);
+void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec, int comp = 0); //LUCA Why is this only defined for D=3? It should be defined for any D.
 void project_real(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec); //overload of project is not always recognized by the compiler
 void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec, int comp = 0);
 void project_cplx(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec); //overload of project is not always recognized by the compiler
-// void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec, int cmplx = 1); //TODO: redundant with the above functions? 
-// ComplexDouble fzero(const Coord<3> &r);
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec, int comp = 0);
 template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec, int comp = 0);
 template <int D> void orthogonalize(double prec, CompFunction<D> &Bra, CompFunction<D> &Ket);
 
 // --- Class to hold a vector of CompFunction ---
 // This class can be used to represent a collection of CompFunction objects, for instance the set of spinors representing the orbitals of an atom/molecule.
-class CompFunctionVector : public std::vector<CompFunction<3>> {
+class CompFunctionVector : public std::vector<CompFunction<3>> {//LUCA: Why is this only defined for D=3? It should be defined for any D.
 public:
     CompFunctionVector(int N = 0);
     std::shared_ptr<MultiResolutionAnalysis<3>> vecMRA;
@@ -228,8 +254,6 @@ ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi);
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet);
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &Ket);
 void orthogonalize(double prec, CompFunctionVector &Bra, CompFunctionVector &Ket);
-
-void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec = -1.0);
 
 
 } // namespace mrcpp

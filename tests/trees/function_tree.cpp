@@ -57,6 +57,7 @@ template <int D> void testZeroFunction() {
         }
         THEN("its squared norm is zero") { REQUIRE(tree.getSquareNorm() == Catch::Approx(0.0)); }
         THEN("it integrates to zero") { REQUIRE(tree.integrate() == Catch::Approx(0.0)); }
+        THEN("half of it integrates to zero") { REQUIRE(tree.integrateSide(0, true) == Catch::Approx(0.0)); }
         THEN("the dot product with itself is zero") { REQUIRE(dot(tree, tree) == Catch::Approx(0.0)); }
     }
     finalize(&mra);
@@ -69,8 +70,7 @@ SCENARIO("Generating FunctionTree nodes", "[function_tree_generating], [function
 }
 
 template <int D> void testGeneratedNodes() {
-    const int depth = 3;
-
+    unsigned int depth = 3;
     Coord<D> r;
     if (r.size() >= 1) r[0] = -0.3;
     if (r.size() >= 2) r[1] = 0.6;
@@ -86,7 +86,6 @@ template <int D> void testGeneratedNodes() {
 
     WHEN("a non-existing node is fetched") {
         MWNode<D> &node = tree.getNode(r, depth);
-
         THEN("there will be allocated GenNodes") {
             REQUIRE(tree.getNGenNodes() > 0);
 
@@ -95,6 +94,7 @@ template <int D> void testGeneratedNodes() {
                 THEN("there will be no GenNodes") { REQUIRE(tree.getNGenNodes() == 0); }
             }
         }
+        (void)&node; // Clean up the fetched node
     }
     finalize(&mra);
 }

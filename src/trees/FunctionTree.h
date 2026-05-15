@@ -62,6 +62,15 @@ public:
     ~FunctionTree() override;
 
     T integrate() const;
+
+    /** 
+     * @brief Integrate over half of the space
+     * @param dim Dimension along which to split
+     * @param positiveSide If true, integrate over the positive side (x>0 if dim=0)
+     * @return Integral of the function over parts of the computational domain
+     */
+    T integrateSide(int dim, bool positiveSide) const;
+    
     double integrateEndNodes(RepresentableFunction_M &f);
     T evalf_precise(const Coord<D> &r);
     T evalf(const Coord<D> &r) const override;
@@ -120,12 +129,12 @@ public:
     void deep_copy(FunctionTree<D, T> *out);
     FunctionTree<D, double> *Real();
     FunctionTree<D, double> *Imag();
-    void CopyTreeToComplex(FunctionTree<3, ComplexDouble> *&out);
-    void CopyTreeToComplex(FunctionTree<2, ComplexDouble> *&out);
-    void CopyTreeToComplex(FunctionTree<1, ComplexDouble> *&out);
-    void CopyTreeToReal(FunctionTree<3, double> *&out); // for testing
-    void CopyTreeToReal(FunctionTree<2, double> *&out); // for testing and compiling
-    void CopyTreeToReal(FunctionTree<1, double> *&out); // for testing and compiling
+    template <typename U = T,
+              typename = std::enable_if_t<std::is_same_v<U, double>>>
+        FunctionTree<D, ComplexDouble>* CopyTreeToComplex();
+     template <typename U = T,
+              typename = std::enable_if_t<std::is_same_v<U, double>>>
+       FunctionTree<D, double>* CopyTreeToReal(); // for testing
 
 protected:
     std::unique_ptr<NodeAllocator<D, T>> genNodeAllocator_p{nullptr};
