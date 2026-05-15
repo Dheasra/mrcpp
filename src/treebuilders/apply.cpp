@@ -67,8 +67,6 @@
   */
  template <int D, typename T> void apply(double prec, FunctionTree<D, T> &out, ConvolutionOperator<D> &oper, FunctionTree<D, T> &inp, int maxIter, bool absPrec) {
      if (out.getMRA() != inp.getMRA()) MSG_ABORT("Incompatible MRA");
-
-     MSG_INFO("1 Apply operator: " << " with prec: " << prec);
  
      Timer pre_t;
      oper.calcBandWidths(prec);
@@ -119,8 +117,6 @@
   *
   */
  template <int D> void apply(double prec, CompFunction<D> &out, ConvolutionOperator<D> &oper, const CompFunction<D> &inp, const ComplexDouble (*metric)[4], int maxIter, bool absPrec) {
-    
-    MSG_INFO("2 Apply operator: " << " with prec: " << prec);
      out = inp.paramCopy(true);
      for (int icomp = 0; icomp < inp.Ncomp(); icomp++) {
          for (int ocomp = 0; ocomp < 4; ocomp++) {

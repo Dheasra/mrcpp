@@ -808,7 +808,7 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
         if (!out_allocated) out.alloc(out.Ncomp());
         return;
     }
-    if (!out_allocated) out.alloc(inp_a.Ncomp());//debug test putting this out here
+    if (!out_allocated) out.alloc(inp_a.Ncomp());
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
         out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] * inp_b.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
         if (inp_a.isreal() and inp_b.isreal()) {
@@ -876,20 +876,6 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
                     mrcpp::multiply(prec, *out.CompC[comp], coef, *inp_a.CompC[comp], *inp_b.CompC[comp], maxIter, absPrec, useMaxNorms, conjugate);
                 }
             }
-            // // restore original tree
-            // if (inp_aisReal) {
-            //     MSG_INFO("rest")
-            //     delete inp_a.CompC[comp];
-            //     inp_a.CompC[comp] = nullptr;
-            //     inp_a.func_ptr->iscomplex = false;
-            //     inp_a.func_ptr->isreal = true;
-            // }
-            // if (inp_bisReal) {
-            //     delete inp_b.CompC[comp];
-            //     inp_b.CompC[comp] = nullptr;
-            //     inp_b.func_ptr->iscomplex = false;
-            //     inp_b.func_ptr->isreal = true;
-            // }
         }
     }
     // restore original tree
@@ -1479,7 +1465,6 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
         Psi[i].func_ptr->isreal = 0;
         Psi[i].func_ptr->iscomplex = 1;
     }
-    MSG_INFO("passed cleaning psi compD");
 
     for (int i = 0; i < N; i++) {
         if (Phi[i].func_ptr->conj) MSG_ABORT("Conjugaison not implemented for rotations");
@@ -1487,7 +1472,6 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
     if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
     if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
 
-    MSG_INFO("passed aborts");
     for (int q = 0; q < Phi[0].Ncomp(); q++) {    
         // 1) make union tree without coefficients. Note that the ref tree is always real (in fact it has no coeff)
         FunctionTree<3> refTree(*Phi.vecMRA);
@@ -1545,7 +1529,6 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
             save_nodes(Phi, refTree, nodesPhi);
             mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
         }
-        MSG_INFO("pre maps");
         // 4) rotate all the nodes
         IntMatrix split_serial;                                 // in the serial case all split are stored in one array
         std::vector<std::vector<ComplexDouble *>> coeffpVec(M); // to put pointers to the rotated coefficient for each orbital in serial case
@@ -1553,7 +1536,6 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
         int csize;                                              // size of the current coefficients (different for roots and branches)
         std::vector<ComplexMatrix> rotatedCoeffVec;             // just to ensure that the data from rotatedCoeff is not deleted, since we point to it.
                                                                 // j indices are for unrotated orbitals, i indices are for rotated orbitals
-        MSG_INFO("pre serial");
         if (serial) {
             std::map<int, int> ix2coef_ref; // to find the index n corresponding to a serialIx
             split_serial.resize(M, max_n);  // not use in the MPI case
@@ -1566,7 +1548,6 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
                                                 // assumes the nodes are ordered such that parent are treated before children. BFS or DFS ok.
                                                 // NB: the n must be traversed approximately in right order: Thread n may have to wait until som other preceding
                                                 // n is finished.
-            MSG_INFO("pre multithreading 1");
     #pragma omp parallel for schedule(dynamic)
             for (int n = 0; n < max_n; n++) {
                 int csize;
@@ -1718,7 +1699,6 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
             }
             mpi::barrier(mpi::comm_wrk); // wait until all rotated nodes are ready
         }
-        MSG_INFO("post multithreading 1");
         // 5) reconstruct trees using rotated nodes.
 
         // only serial case can use OMP, because MPI cannot be used by threads
@@ -1731,7 +1711,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
                 if (coeffpVec[j].size() == 0) continue;
                 // Psi[j].alloc(1); // All data is stored in coeffpVec[j]
                 Psi[j].alloc_comp(q);
-                Psi[j].complex(q).clear(); //test debug test
+                Psi[j].complex(q).clear();
                 Psi[j].complex(q).makeTreefromCoeff(refTree, coeffpVec[j], ix2coef[j], prec);
             }
         } else { // MPI case
@@ -1760,7 +1740,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
                 }
 
                 // Psi[j].alloc(1);
-                Psi[j].alloc_comp(q);
+                Psi[j].alloc_comp(q); //could be a problem to allocate in parallel, but it should be okay since there is no OMP here?
                 Psi[j].complex(q).clear();
                 Psi[j].complex(q).makeTreefromCoeff(refTree, coeffpVec, ix2coef, prec);
 
@@ -1784,11 +1764,9 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     bool iscomplex = false;
     for (int i=0; i < Phi.size(); i++) if (Phi[i].iscomplex()) iscomplex=true;
     if (iscomplex) {
-        MSG_INFO("rotate complex");
         rotate_cplx(Phi, U, Psi, prec);
         return;
     }
-    MSG_INFO("rotate real");
 
     // MSG_INFO("Rotation matrix ");
     // for (int a = 0; a < U.rows(); a++) {
@@ -1807,9 +1785,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
     if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
 
-    // #pragma omp parallel for schedule(static) //test debug test multithreading (Seems to work?)
     for (int q = 0; q < Phi[0].Ncomp(); q++) {
-        // std::cout << "mrcpp::CompFunction::rotate startut component " << q << " with Phi (1st argument) norm " << Phi[0].norm() << " with Psi norm " << Psi[0].norm() << std::endl;
         // 1) make union tree without coefficients. Note that the ref tree is always real (in fact it has no coeff)
         FunctionTree<3> refTree(*Phi.vecMRA);
         mpi::allreduce_Tree_noCoeff(refTree, Phi, mpi::comm_wrk);
@@ -2187,7 +2163,6 @@ ComplexVector dot(CompFunctionVector &Bra, CompFunctionVector &Ket) {
  */
 ComplexMatrix calc_lowdin_matrix(CompFunctionVector &Phi) {
     ComplexMatrix S_tilde = calc_overlap_matrix(Phi);
-    MSG_INFO("overlap computed");
     ComplexMatrix S_m12 = math_utils::hermitian_matrix_pow(S_tilde, -1.0 / 2.0);
     return S_m12;
 }
