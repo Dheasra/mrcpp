@@ -452,36 +452,28 @@ template <int D> void CompFunction<D>::setCplx(FunctionTree<D, ComplexDouble> *t
  */
 template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp) {
     if (Ncomp() < inp.Ncomp()) {
-        // MSG_INFO("debug aaaa");
         func_ptr->data = inp.func_ptr->data;
-        alloc(inp.Ncomp(), false);
+        alloc(inp.Ncomp(), true);
     }
 
-    MSG_INFO("debug bbbb");
 
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (this->isreal() and inp.isreal() and std::abs(c.imag()) < MachineZero) {
             CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
         } else {
-            MSG_INFO("imma be complex inplace" << i << " is inp complex"<< inp.iscomplex());
             if (this->isreal()) {
                 for (int comp = 0; comp < this->Ncomp(); comp++){
-                    // MSG_INFO("tututututut=" << this->Ncomp());
                     CompD[comp]->CopyTreeToComplex(CompC[comp]);
                     delete CompD[comp];
                     CompD[comp] = nullptr;
-                    // MSG_INFO("tututututut2 "<< CompC[comp]);
                 }
                 func_ptr->iscomplex = true;
                 func_ptr->isreal = false;
             }
             if (inp.isreal()) { //provision in case inp is real and c is not
-                MSG_INFO("tutututututinp");
                 inp.CompD[i]->CopyTreeToComplex(inp.CompC[i]);
             }
-            MSG_INFO("tututututut 6"<< inp.CompC[i]);
             CompC[i]->add_inplace(c, *inp.CompC[i]);
-            MSG_INFO("tututututut 7");
             if (inp.isreal()){ //restoring inp to what is was
                 delete inp.CompC[i];
                 inp.CompC[i] = nullptr;
@@ -495,33 +487,28 @@ template <int D> int CompFunction<D>::crop(double prec) {
     int nChunksremoved = 0;
     for (int i = 0; i < Ncomp(); i++) {
         if (isreal()) {
-            // MSG_INFO("tut "<<i);
             nChunksremoved += CompD[i]->crop(prec, 1.0, false);
         } else {
             nChunksremoved += CompC[i]->crop(prec, 1.0, false);
         }
-        // MSG_INFO("loop over "<<i);
     }
-    // MSG_INFO("done");
     return nChunksremoved;
 }
 
 /** @brief In place multiply with scalar. Fully in-place.*/
 template <int D> void CompFunction<D>::rescale(ComplexDouble c) {
-    // std::cout << "CompFunction rescale: tut " << std::endl;
     bool need_to_rescale = not(isShared()) or mpi::share_master();
     if (need_to_rescale) {
-        for (int i = 0; i < Ncomp(); i++) {
-            // std::cout << "CompFunction rescale: init " << i << std::endl;
-            if (iscomplex()) {
-                // std::cout << "CompFunction rescale: complex" << std::endl;
+        if (iscomplex()) {
+            for (int i = 0; i < Ncomp(); i++) {
                 CompC[i]->rescale(c);
-            } else {
-                if (abs(c.imag()) > MachineZero) { // works only only for NComp==1)
+            }
+        } else {
+            for (int i = 0; i < Ncomp(); i++) {
+                if (abs(c.imag()) > MachineZero) { 
                     CompD[i]->CopyTreeToComplex(CompC[i]);
                     delete CompD[i];
                     CompD[i] = nullptr;
-                    // std::cout << "CompFunction rescale: converting to complex" << std::endl;
                     func_ptr->iscomplex = true;
                     func_ptr->isreal = false;
                     CompC[i]->rescale(c);
@@ -530,6 +517,22 @@ template <int D> void CompFunction<D>::rescale(ComplexDouble c) {
                 }
             }
         }
+        // for (int i = 0; i < Ncomp(); i++) {
+        //     if (iscomplex()) {
+        //         CompC[i]->rescale(c);
+        //     } else {
+        //         if (abs(c.imag()) > MachineZero) { // works only only for NComp==1)
+        //             CompD[i]->CopyTreeToComplex(CompC[i]);
+        //             delete CompD[i];
+        //             CompD[i] = nullptr;
+        //             func_ptr->iscomplex = true;
+        //             func_ptr->isreal = false;
+        //             CompC[i]->rescale(c);
+        //         } else {
+        //             CompD[i]->rescale(c.real());
+        //         }
+        //     }
+        // }
     } else
         MSG_ABORT("Not implemented");
 }
@@ -582,12 +585,12 @@ template <int D> void deep_copy(CompFunction<D> *out, const CompFunction<D> &inp
  * Deep copy: meta func_ptr->data is copied along with the content of each component.
  */
 template <int D> void deep_copy(CompFunction<D> &out, const CompFunction<D> &inp) {
-    MSG_INFO("start");
+    // MSG_INFO("start");
     out.func_ptr->data = inp.func_ptr->data;
     out.alloc(inp.Ncomp());
     if (inp.getNNodes() == 0) return;
     for (int i = 0; i < inp.Ncomp(); i++) {
-        MSG_INFO("comp ="<< i<< " inp_real="<< inp.isreal()<< " out_real="<<out.isreal()<< " inp_complex="<< inp.iscomplex()<< " out_complex="<<out.iscomplex());
+        // MSG_INFO("comp ="<< i<< " inp_real="<< inp.isreal()<< " out_real="<<out.isreal()<< " inp_complex="<< inp.iscomplex()<< " out_complex="<<out.iscomplex());
         // MSG_INFO("comp ="<< i<< " inp_complex="<< inp.iscomplex()<< " out_complex="<<out.iscomplex());
         if (inp.isreal()) {
             inp.CompD[i]->deep_copy(out.CompD[i]);
@@ -723,12 +726,12 @@ void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec) {
     CompFunction<3> rho_tmp(1, 1); //one component CompFunction
     //define rho_tmp as same number field as input for allocation
     if (inp.isreal()) {
-        MSG_INFO("real");
+        // MSG_INFO("real");
         rho_tmp.defreal();
         rho_tmp.func_ptr->data.iscomplex = 0;
     }
     if (inp.iscomplex()) {
-        MSG_INFO("complex");
+        // MSG_INFO("complex");
         rho_tmp.defcomplex();
         rho_tmp.func_ptr->data.isreal = 0;
     }
@@ -743,22 +746,22 @@ void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec) {
             rho_tmp.CompC[0]->add_inplace({1.0, 0.0}, *component_density.CompC[i]);
         }
     }
-    MSG_INFO("output is real="<< out.isreal()<< ", is complex="<< out.iscomplex());
+    // MSG_INFO("output is real="<< out.isreal()<< ", is complex="<< out.iscomplex());
     //making sure that out is real and clear the rest
     // out.defreal();
     // out.func_ptr->data.iscomplex = 0;
     // out.alloc(1, false);
-    MSG_INFO("Collected");
+    // MSG_INFO("Collected");
     if (rho_tmp.iscomplex()) {
         // copy onto out's real component
         // out.CompD[0] = rho_tmp.CompC[0]->Real();
-        MSG_INFO("complex copying 1");
+        // MSG_INFO("complex copying 1");
         rho_tmp.CompC[0]->Real()->deep_copy(out.CompD[0]);
-        MSG_INFO("complex copying 2");
+        // MSG_INFO("complex copying 2");
         delete rho_tmp.CompC[0];
-        MSG_INFO("complex copying 3");
+        // MSG_INFO("complex copying 3");
         rho_tmp.CompC[0] = nullptr;
-        MSG_INFO("complex copying 4");
+        // MSG_INFO("complex copying 4");
         //     out.CompC[i] = nullptr; 
         // for (int i = 0; i < out.Ncomp(); i++) {
         //     out.CompD[i] = out.CompC[i]->Real();
@@ -770,13 +773,13 @@ void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec) {
         // out.func_ptr->isreal = 1;
         // out.func_ptr->iscomplex = 0;
     } else {
-        MSG_INFO("real copying");
+        // MSG_INFO("real copying");
         //deep copy rho_tmp's value into out
         rho_tmp.CompD[0]->deep_copy(out.CompD[0]);
         delete rho_tmp.CompD[0];
         rho_tmp.CompD[0] = nullptr;
     }
-    MSG_INFO("made density");
+    // MSG_INFO("made density");
 }
 
 
@@ -2052,7 +2055,6 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
         // #pragma omp critical // test debug test
             for (int j = 0; j < M; j++) {
                 if (coeffpVec[j].size() == 0) continue;
-                // std::cout << "reconstructing orbital " << j << " comp=" << q << std::endl;
                 // Psi[j].alloc(1);
                 Psi[j].alloc_comp(q, false); //possible issue (multithreading) but maybe safe since no MPI here? 
                 Psi[j].real(q).clear();
@@ -2096,20 +2098,12 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
 
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec) {
     CompFunctionVector Psi(0);
-    MSG_INFO("rotate new");
     for (int i = 0; i < Phi.size(); i++){
-        MSG_INFO("test rotate new 1 "<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
         auto testut1 = Phi[i].func_ptr->data;
-        MSG_INFO("Test rotate new 2 "<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
         CompFunction<3> psi_tmp(Phi[i].func_ptr->data, false); 
-        MSG_INFO("test 3"<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
         deep_copy(psi_tmp, Phi[i]); //make sure it is a separate object
-        MSG_INFO("test 4" << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
         Psi.push_back(psi_tmp);
-        // deep_copy(Psi[i],Phi[i]);
-        MSG_INFO("orb finished"<< i << " phi_isreal="<< Phi[i].isreal()<< " phi_iscomplex="<< Phi[i].iscomplex());
     }
-    MSG_INFO("rotate new finished");
     rotate(Psi, U, Phi, prec); 
     // rotate(Phi, U, Phi, prec); 
     return;
