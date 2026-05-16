@@ -1757,16 +1757,7 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
                 pointerstodelete.clear();
             }
         }
-        // //rotate the multiplicative coefficients c1 of the CompFunctionVector 
-        // //create a vector of the input's coefficient for the current component q
-        // ComplexVector c1_q(N);
-        // for (int i=0; i<N; i++) c1_q[i] = Phi[i].func_ptr->data.c1[q];
-        // //rotate this vector and store it in a new complex vector
-        // ComplexVector rotated_c1_q = U*c1_q;
-        // //set the output Psi's c1[q] to be the rotated c1
-        // for (int i=0; i<M; i++) Psi[i].func_ptr->data.c1[q] = rotated_c1_q[i];
     }
-    
 }
 
 /** @brief Make a linear combination of functions
@@ -1781,6 +1772,28 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     bool iscomplex = false;
     int N = Phi.size();
     int M = Psi.size();
+
+    //Rescaling the trees with their prefactors c1 (which might make them complex, hence why we do it here)
+    for (int i=0; i < N; i++){
+        for (int q=0; q<Phi[i].Ncomp();q++){
+            if (Phi[i].isreal() and ((Phi[i].func_ptr->data.c1[q]).imag()<MachineZero)) {
+                Phi[i].CompD[q]->rescale((Phi[i].func_ptr->data.c1[q]).real());
+            } else {
+                if (Phi[i].isreal()) {
+                    for (int comp=0; comp<Phi[i].Ncomp();comp++){
+                        Phi[i].CompC[q] = Phi[i].CompD[q]->CopyTreeToComplex();
+                    }
+                    Phi[i].defcomplex();
+                }
+                //Now that the trees are converted, rescaling
+                Phi[i].CompC[q]->rescale(Phi[i].func_ptr->data.c1[q]);
+                //Resetting the prefactor to 1, as it is now held in the tree itself
+                Phi[i].func_ptr->data.c1[q] = {1.0,0.0};
+            }
+        }
+    }
+
+    //Handling complex case
     for (int i=0; i < N; i++) if (Phi[i].iscomplex()) iscomplex=true;
     if (iscomplex) {
         rotate_cplx(Phi, U, Psi, prec);
@@ -2104,15 +2117,6 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 pointerstodelete.clear();
             }
         }
-    
-        // //rotate the multiplicative coefficients c1 of the CompFunctionVector 
-        // //create a vector of the input's coefficient for the current component q
-        // ComplexVector c1_q(N);
-        // for (int i=0; i<N; i++) c1_q[i] = Phi[i].func_ptr->data.c1[q];
-        // //rotate this vector and store it in a new complex vector
-        // ComplexVector rotated_c1_q = U*c1_q;
-        // //set the output Psi's c1[q] to be the rotated c1
-        // for (int i=0; i<M; i++) Psi[i].func_ptr->data.c1[q] = rotated_c1_q[i];
     }
 
 }
