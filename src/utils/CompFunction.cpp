@@ -622,6 +622,7 @@ template <int D> void deep_copy(CompFunction<D> &out, const CompFunction<D> &inp
  *
  */
 template <int D> void add(CompFunction<D> &out, ComplexDouble a, CompFunction<D> inp_a, ComplexDouble b, CompFunction<D> inp_b, double prec, bool conjugate) {
+    // The coefficients c1 of inp_a,b are not relevant in this function and will be handled in linear_combination
     std::vector<ComplexDouble> coefs(2);
     coefs[0] = a;
     coefs[1] = b;
@@ -757,10 +758,12 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (not inp.iscomplex()){
             // add(prec, *rho_tmp.CompD[0], 1.0, *rho_tmp.CompD[0], 1.0, *component_density.CompD[i], false, false, false);
-            rho_tmp.CompD[0]->add_inplace(1.0, *component_density.CompD[i]);
+            rho_tmp.CompD[0]->add_inplace((component_density.func_ptr->data.c1[i]).real(), *component_density.CompD[i]);
+            // rho_tmp.CompD[0]->add_inplace(1.0, *component_density.CompD[i]);
         } else {
             // add(prec, *rho_tmp.CompC[0], {1.0,0.0}, *rho_tmp.CompC[0], {1.0,0.0}, *component_density.CompC[i], false, false, false);
-            rho_tmp.CompC[0]->add_inplace({1.0, 0.0}, *component_density.CompC[i]);
+            rho_tmp.CompC[0]->add_inplace(component_density.func_ptr->data.c1[i], *component_density.CompC[i]);
+            // rho_tmp.CompC[0]->add_inplace({1.0,0.0}, *component_density.CompC[i]);
         }
     }
     // MSG_INFO("output is real="<< out.isreal()<< ", is complex="<< out.iscomplex());
@@ -829,7 +832,11 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
     bool inp_aisReal = inp_a.isreal();
     bool inp_bisReal = inp_b.isreal();
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
-        out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] * inp_b.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
+        if (conjugate){
+            out.func_ptr->data.c1[comp] = std::conj(inp_a.func_ptr->data.c1[comp]) * inp_b.func_ptr->data.c1[comp];
+        }else {
+            out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] * inp_b.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
+        }
         if (inp_aisReal and inp_bisReal) {
             // if (!out_allocated) out.alloc(out.Ncomp()); //moved out of the loop
             if (need_to_multiply) {
@@ -989,7 +996,6 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDoub
  * @param conjugate 
  */
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, double> &inp_b, double prec, bool absPrec, bool useMaxNorms, bool conjugate){
-    // MSG_INFO("pouet 1");
     if (inp_a.func_ptr->conj) conjugate = (not conjugate);
     bool need_to_multiply = not(out.isShared()) or mpi::share_master();
     bool out_allocated = true;
@@ -1008,9 +1014,13 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
     // FunctionTree<D, ComplexDouble> *pointer_to_inp_b_comp = nullptr;
     // if (inp_a.isreal()) inp_b.CopyTreeToComplex(pointer_to_inp_b_comp);
 
-    if (!out_allocated) out.alloc(inp_a.Ncomp()); //test debug, used to be out.Ncomp()
+    if (!out_allocated) out.alloc(inp_a.Ncomp()); 
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
-        out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
+        if (conjugate) {
+            out.func_ptr->data.c1[comp] = std::conj(inp_a.func_ptr->data.c1[comp]);
+        } else{
+            out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
+        }
         if (inp_a.isreal()) {
             if (need_to_multiply) {
                 // if (!out_allocated) out.alloc(inp_a.Ncomp());//moved outside the loop
@@ -1076,6 +1086,11 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
     mpi::share_function(out, 0, 9911, mpi::comm_share);
 }
 
+
+/*
+* @brief Component-wise multiplication from the right with a complex function tree.
+* @param conjugate: boolean to choose if we want to conjugate the CompFunction inp_a, not the FunctionTree.
+*/
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, ComplexDouble> &inp_b, double prec, bool absPrec, bool useMaxNorms, bool conjugate){
     if (inp_a.func_ptr->conj) conjugate = (not conjugate);
     bool need_to_multiply = not(out.isShared()) or mpi::share_master();
@@ -1093,7 +1108,12 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
     double coef = 1.0;
     if (!out_allocated) out.alloc(inp_a.Ncomp(), true);
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
-        out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] ; // we could put this is coef if everything is real?
+        // out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp] ; // we could put this is coef if everything is real?
+        if (conjugate) {
+            out.func_ptr->data.c1[comp] = std::conj(inp_a.func_ptr->data.c1[comp]);
+        } else{
+            out.func_ptr->data.c1[comp] = inp_a.func_ptr->data.c1[comp]; // we could put this is coef if everything is real?
+        }
         // Whether or not inp_a is complex, inp_b is, so we simply make a complex copy of inp_a if it is real
         // bool inp_bisReal = inp_b.isreal();
         bool inp_aisReal = inp_a.isreal(); //book keeping to restore inp_a's properties at the end of the iteration
@@ -1274,7 +1294,7 @@ void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r
         if (i == comp) {
             out.alloc_comp(i);
             mrcpp::project<3>(prec, *out.CompC[i], f);
-        } else if (need_to_allocate) {
+        } else if (need_to_allocate) { //This may be completely useless and might be replaceable by setZero, but the code seems to be working and I don't dare break it now
             // out.CompC[i]->setZero();
             out.alloc_comp(i);
             mrcpp::project<3>(prec, *out.CompC[i], fzero);
@@ -1293,47 +1313,6 @@ void project_cplx(CompFunction<3> &out, std::function<ComplexDouble(const Coord<
     mpi::share_function(out, 0, 123123, mpi::comm_share);
 }
 
-//debug function 
-// ComplexDouble fzero(const Coord<3> &r) {
-//     return ComplexDouble(0.0, 0.0);
-// }
-
-// template <int D, typename T>
-
-//commented out because redundant
-// /* @brief Projects complex f onto out at component compIndex, zeroing other components if needed
-//  * @param out Output CompFunction
-//  * @param f Input function to project
-//  * @param prec Precision for the projection
-//  * @param cmplx Flag indicating whether the function is complex (1) or real (0)
-//  * @param comp Component index to project onto
-// */
-// void project(CompFunction<3> &out, int compIndex, std::function<ComplexDouble(const Coord<3> &r)> f, double prec, int cmplx) {
-//     bool need_to_project = not(out.isShared()) or mpi::share_master();
-//     out.func_ptr->isreal = (1-cmplx)%2;
-//     out.func_ptr->iscomplex = cmplx%2; //mod 2 as a safety measure
-
-//     // This variable ensures that scalar function do not allocate additional components
-//     bool need_to_allocate = true;
-//     if (out.Ncomp() < 2) {need_to_allocate = false;}
-
-//     // lambda function when we need to initialise a component to zero
-//     std::function<ComplexDouble(const Coord<3>&)> fzero = [](const Coord<3> &r) -> ComplexDouble { return ComplexDouble(0.0, 0.0); };
-
-//     // allocating and projecting the component(s)
-//     for (int i = 0; i < out.Ncomp(); i++) {
-//         if (i == compIndex) {
-//             out.alloc_comp(i);
-//             mrcpp::project<3>(prec, *out.CompC[i], f);
-//         } else if (need_to_allocate) {
-//             // out.CompC[i]->setZero();
-//             out.alloc_comp(i);
-//             mrcpp::project<3>(prec, *out.CompC[i], fzero);
-//         }
-//     };
-
-//     mpi::share_function(out, 0, 123123, mpi::comm_share); //The 0 is the rank of the master process, 123123 is a tag for the message
-// }
 
 /* @brief Project a RepresentableFunction onto a real-valued CompFunction
  * @param out Output CompFunction
@@ -1778,6 +1757,14 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
                 pointerstodelete.clear();
             }
         }
+        // //rotate the multiplicative coefficients c1 of the CompFunctionVector 
+        // //create a vector of the input's coefficient for the current component q
+        // ComplexVector c1_q(N);
+        // for (int i=0; i<N; i++) c1_q[i] = Phi[i].func_ptr->data.c1[q];
+        // //rotate this vector and store it in a new complex vector
+        // ComplexVector rotated_c1_q = U*c1_q;
+        // //set the output Psi's c1[q] to be the rotated c1
+        // for (int i=0; i<M; i++) Psi[i].func_ptr->data.c1[q] = rotated_c1_q[i];
     }
     
 }
@@ -1792,11 +1779,14 @@ void rotate_cplx(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVe
  */
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector &Psi, double prec) { 
     bool iscomplex = false;
-    for (int i=0; i < Phi.size(); i++) if (Phi[i].iscomplex()) iscomplex=true;
+    int N = Phi.size();
+    int M = Psi.size();
+    for (int i=0; i < N; i++) if (Phi[i].iscomplex()) iscomplex=true;
     if (iscomplex) {
         rotate_cplx(Phi, U, Psi, prec);
         return;
     }
+
 
     // MSG_INFO("Rotation matrix ");
     // for (int a = 0; a < U.rows(); a++) {
@@ -1805,13 +1795,28 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     //     }
     //     std::cout << std::endl;
     // }
+    // ComplexMatrix shouldbeIdentity=U.conjugate().transpose()*U;
+    // for (int a = 0; a < shouldbeIdentity.rows(); a++) {
+    //     for (int b = 0; b < shouldbeIdentity.cols(); b++) {
+    //         std::cout<< "Id?(" << a << ", " << b << ") = " << shouldbeIdentity(a, b) << "; ";
+    //     }
+    //     std::cout << std::endl;
+    // }
+    // for (int q=0; q<Phi[0].Ncomp();q++){
+    //     //rotate the multiplicative coefficients c1 of the CompFunctionVector 
+    //     //create a vector of the input's coefficient for the current component q
+    //     ComplexVector c1_q(N);
+    //     for (int i=0; i<N; i++) c1_q[i] = Phi[i].func_ptr->data.c1[q];
+    //     //rotate this vector and store it in a new complex vector
+    //     ComplexVector rotated_c1_q = U*c1_q;
+    //     //set the output Psi's c1[q] to be the rotated c1
+    //     for (int i=0; i<M; i++) Psi[i].func_ptr->data.c1[q] = rotated_c1_q[i];
+    // }
 
     // The principle of this routine is that nodes are rotated one by one using matrix multiplication.
     // The routine does avoid when possible to move data, but uses pointers and indices manipulation.
     // MPI version does not use OMP yet, Serial version uses OMP
     // size of input is N, size of output is M
-    int N = Phi.size();
-    int M = Psi.size();
     if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
     if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
 
@@ -2099,11 +2104,23 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
                 pointerstodelete.clear();
             }
         }
+    
+        // //rotate the multiplicative coefficients c1 of the CompFunctionVector 
+        // //create a vector of the input's coefficient for the current component q
+        // ComplexVector c1_q(N);
+        // for (int i=0; i<N; i++) c1_q[i] = Phi[i].func_ptr->data.c1[q];
+        // //rotate this vector and store it in a new complex vector
+        // ComplexVector rotated_c1_q = U*c1_q;
+        // //set the output Psi's c1[q] to be the rotated c1
+        // for (int i=0; i<M; i++) Psi[i].func_ptr->data.c1[q] = rotated_c1_q[i];
     }
 
 }
 
 void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec) {
+    //create a deep_copy of the input, because the complex instance of rotate 
+    //erase the output's trees, which creates a seg fault when it is called
+    //through this function.
     CompFunctionVector Psi(0);
     for (int i = 0; i < Phi.size(); i++){
         auto testut1 = Phi[i].func_ptr->data;
