@@ -135,7 +135,7 @@ public:
     int share() const { return func_ptr->data.shared; }
     int *Nchunks() const { return func_ptr->data.Nchunks; } // number of chunks of each component tree
     ComplexDouble getFac() const { return func_ptr->data.c1[0]; } // returns the overall multiplicative factor
-    void setFac(ComplexDouble fac) { func_ptr->data.c1[0] = fac; } // sets the overall multiplicative factor
+    void setFac(ComplexDouble fac, int i = 0) { func_ptr->data.c1[i] = fac; } // sets the overall multiplicative factor
 
     CompFunction paramCopy(bool alloc = false) const;
     ComplexDouble integrate() const;
@@ -213,7 +213,7 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, double> &in
 template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDouble> &inp_a, 
                                RepresentableFunction<D, ComplexDouble> &f, double prec, int nrefine = 0, 
                                bool conjugate = false);
-template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec);
+template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec, std::vector<bool> contrib = std::vector<bool>(4, true)); 
 //multiplication rules for Potentials on spinors or other exclusively single component functions with CompFunctions
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, double> &inp_b, double prec, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, ComplexDouble> &inp_b, double prec, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);
@@ -255,5 +255,5 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet);
 ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &Ket);
 void orthogonalize(double prec, CompFunctionVector &Bra, CompFunctionVector &Ket);
 
-
+// void add(CompFunctionVector &out, ComplexVector c, CompFunctionVector &inp);
 } // namespace mrcpp

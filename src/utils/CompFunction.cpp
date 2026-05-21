@@ -729,11 +729,20 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
 }
 
 /** @brief out = conj(inp) * inp
- *
+ * 
+ *  @param contrib: 4-vector of boolean selecting which components contribute to the density. By default all elements do.
+ * 
  *  Note that output is always real
+ * 
  *
  */
-template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec) {
+template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec, std::vector<bool> contrib) {
+    //provision in case inadequate contribution vector is provided, we just pad it with false
+    if (contrib.size() < inp.Ncomp()) {
+        MSG_WARN("Contribution vector is smaller than input's number of component, excess components will not contribute");
+        for (int i = contrib.size(); i < inp.Ncomp(); i++ ) contrib.push_back(false);
+    }
+
     //compute the density of each component of inp individually
     CompFunction<D> component_density(1, inp.Ncomp());
     component_density.func_ptr->data = inp.func_ptr->data; 
@@ -757,13 +766,9 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
     rho_tmp.alloc(1, true);
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (not inp.iscomplex()){
-            // add(prec, *rho_tmp.CompD[0], 1.0, *rho_tmp.CompD[0], 1.0, *component_density.CompD[i], false, false, false);
-            rho_tmp.CompD[0]->add_inplace((component_density.func_ptr->data.c1[i]).real(), *component_density.CompD[i]);
-            // rho_tmp.CompD[0]->add_inplace(1.0, *component_density.CompD[i]);
+            if (contrib[i]) rho_tmp.CompD[0]->add_inplace((component_density.func_ptr->data.c1[i]).real(), *component_density.CompD[i]);
         } else {
-            // add(prec, *rho_tmp.CompC[0], {1.0,0.0}, *rho_tmp.CompC[0], {1.0,0.0}, *component_density.CompC[i], false, false, false);
-            rho_tmp.CompC[0]->add_inplace(component_density.func_ptr->data.c1[i], *component_density.CompC[i]);
-            // rho_tmp.CompC[0]->add_inplace({1.0,0.0}, *component_density.CompC[i]);
+            if (contrib[i]) rho_tmp.CompC[0]->add_inplace(component_density.func_ptr->data.c1[i], *component_density.CompC[i]);
         }
     }
     // MSG_INFO("output is real="<< out.isreal()<< ", is complex="<< out.iscomplex());
@@ -3535,7 +3540,22 @@ template <int D> void orthogonalize(double prec, CompFunction<D> &Bra, CompFunct
     }
 }
 
-void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec);
+// /** @brief In-place element-wise addition of two CompFunctionVectors
+//  * output[i] = out[i] + c[i]*inp[i]
+//  *  @param out: receiving CompFunctionVector, will hold the result, but should not start out empty!
+//  *  @param c: vector of coefficients 
+//  *  @param inp: CompFunctionVector to be added
+//  */
+// void add(CompFunctionVector &out, ComplexVector c, CompFunctionVector &inp){
+//     MSG_INFO("test install");
+//     if (out.size()!=inp.size() or c.size()!=inp.size()) MSG_ABORT("Mismatched vector sizes for addition!");
+//     for (int i=0; i < out.size(); i++){
+//         //in-place addition
+//         out[i].add(c[i], inp[i]);
+//     }
+// }
+
+template void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec,  std::vector<bool> contrib = std::vector<bool>(4, true));
 template ComplexDouble dot(const CompFunction<3> &bra, const CompFunction<3> &ket);
 template void project(CompFunction<3> &out, RepresentableFunction<3, double> &f, double prec, int comp = 0);
 template void project(CompFunction<3> &out, RepresentableFunction<3, ComplexDouble> &f, double prec, int comp = 0);
@@ -3554,6 +3574,6 @@ template void add(CompFunction<3> &out, ComplexDouble a, CompFunction<3> inp_a, 
 template void linear_combination(CompFunction<3> &out, const std::vector<ComplexDouble> &c, std::vector<CompFunction<3>> &inp, double prec, bool conjugate);
 template double node_norm_dot(CompFunction<3> bra, CompFunction<3> ket);
 template void orthogonalize(double prec, CompFunction<3> &Bra, CompFunction<3> &Ket);
-template void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec);
+// template void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec);
 
 } // namespace mrcpp
