@@ -742,6 +742,7 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
         MSG_WARN("Contribution vector is smaller than input's number of component, excess components will not contribute");
         for (int i = contrib.size(); i < inp.Ncomp(); i++ ) contrib.push_back(false);
     }
+    MSG_INFO("contrib received is"<< contrib[0]<< contrib[1]<< contrib[2]<< contrib[3]);
 
     //compute the density of each component of inp individually
     CompFunction<D> component_density(1, inp.Ncomp());
@@ -1256,8 +1257,8 @@ void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, d
             mrcpp::project<3>(prec, *out.CompD[i], f);
         } else if (need_to_allocate) {
             // out.CompD[i]->setZero();
-            out.alloc_comp(i);
-            mrcpp::project<3>(prec, *out.CompD[i], fzero);
+            out.alloc_comp(i, true);
+            // mrcpp::project<3>(prec, *out.CompD[i], fzero);
         }
     };
     //mpi 
@@ -1301,8 +1302,8 @@ void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r
             mrcpp::project<3>(prec, *out.CompC[i], f);
         } else if (need_to_allocate) { //This may be completely useless and might be replaceable by setZero, but the code seems to be working and I don't dare break it now
             // out.CompC[i]->setZero();
-            out.alloc_comp(i);
-            mrcpp::project<3>(prec, *out.CompC[i], fzero);
+            out.alloc_comp(i, true);
+            // mrcpp::project<3>(prec, *out.CompC[i], fzero);
         }
     };
     mpi::share_function(out, 0, 123123, mpi::comm_share);
