@@ -461,16 +461,16 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
     if (inp.getSquareNorm() < MachineZero) {
         // nothing to add
     } else if((this->getSquareNorm() < MachineZero) or (Ncomp() < inp.Ncomp())) {
-        //copy
+        //self empty, copy inp into self
         func_ptr->data = inp.func_ptr->data;
         alloc(inp.Ncomp(), true);
         for (int i = 0; i < inp.Ncomp(); i++) {
+            //equivalent to copying and rescaling
             if(inp.isreal()) CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
             if(inp.iscomplex()) CompC[i]->add_inplace(c, *inp.CompC[i]);
         }
     } else {
-
-
+        //adding inp to non-empty self
         for (int i = 0; i < inp.Ncomp(); i++) {
             if (this->isreal() and inp.isreal() and std::abs((c*inp.func_ptr->data.c1[i]).imag()) < MachineZero) {
                 CompD[i]->add_inplace((c*inp.func_ptr->data.c1[i]).real(), *inp.CompD[i]);
@@ -574,12 +574,13 @@ template <int D> void CopyToComplex(CompFunction<D> &out, const CompFunction<D> 
             out.CompC[i] = inp.CompD[i]->CopyTreeToComplex();
         } else {
             // out.CompC[i] = inp.CompC[i]->deep_copy();
-            inp.CompC[i]->deep_copy(out.CompC[i]);
+            //we should uniformise the syntax of functions in this code
+            inp.CompC[i]->deep_copy(out.CompC[i]); 
         }
     }
 }
 
-/** @brief Deep copy
+/** @brief Deep copy (pointer version)
  *
  * Deep copy: meta data is copied along with the content of each component.
  */
@@ -596,18 +597,15 @@ template <int D> void deep_copy(CompFunction<D> *out, const CompFunction<D> &inp
     }
 }
 
-/** @brief Deep copy
+/** @brief Deep copy (reference version)
  *
  * Deep copy: meta func_ptr->data is copied along with the content of each component.
  */
 template <int D> void deep_copy(CompFunction<D> &out, const CompFunction<D> &inp) {
-    // MSG_INFO("start");
     out.func_ptr->data = inp.func_ptr->data;
     out.alloc(inp.Ncomp());
     if (inp.getNNodes() == 0) return;
     for (int i = 0; i < inp.Ncomp(); i++) {
-        // MSG_INFO("comp ="<< i<< " inp_real="<< inp.isreal()<< " out_real="<<out.isreal()<< " inp_complex="<< inp.iscomplex()<< " out_complex="<<out.iscomplex());
-        // MSG_INFO("comp ="<< i<< " inp_complex="<< inp.iscomplex()<< " out_complex="<<out.iscomplex());
         if (inp.isreal()) {
             inp.CompD[i]->deep_copy(out.CompD[i]);
         } else {
@@ -725,12 +723,15 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
             }
         }
         mpi::share_function(out, 0, 9911, mpi::comm_share);
+        //resetting the prefactor as it has been inherited from inp[0] (and thus might be different than 1)
+        //and has been accounted for in the linear combination coefficients
+        out.func_ptr->data.c1[comp] = {1.0,0.0};
     }
 }
 
 /** @brief out = conj(inp) * inp
  * 
- *  @param contrib: 4-vector of boolean selecting which components contribute to the density. By default all elements do.
+ *  @param contrib: 4-vector of boolean selecting which components contribute to the density. By default a 4-vector of true.
  * 
  *  Note that output is always real
  * 
@@ -742,7 +743,6 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
         MSG_WARN("Contribution vector is smaller than input's number of component, excess components will not contribute");
         for (int i = contrib.size(); i < inp.Ncomp(); i++ ) contrib.push_back(false);
     }
-    MSG_INFO("contrib received is"<< contrib[0]<< contrib[1]<< contrib[2]<< contrib[3]);
 
     //compute the density of each component of inp individually
     CompFunction<D> component_density(1, inp.Ncomp());
@@ -754,12 +754,10 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
     CompFunction<3> rho_tmp(1, 1); //one component CompFunction
     //define rho_tmp as same number field as input for allocation
     if (inp.isreal()) {
-        // MSG_INFO("real");
         rho_tmp.defreal();
         rho_tmp.func_ptr->data.iscomplex = 0;
     }
     if (inp.iscomplex()) {
-        // MSG_INFO("complex");
         rho_tmp.defcomplex();
         rho_tmp.func_ptr->data.isreal = 0;
     }
@@ -772,40 +770,19 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
             if (contrib[i]) rho_tmp.CompC[0]->add_inplace(component_density.func_ptr->data.c1[i], *component_density.CompC[i]);
         }
     }
-    // MSG_INFO("output is real="<< out.isreal()<< ", is complex="<< out.iscomplex());
     //making sure that out is real and clear the rest
-    // out.defreal();
-    // out.func_ptr->data.iscomplex = 0;
-    // out.alloc(1, false);
-    // MSG_INFO("Collected");
     if (rho_tmp.iscomplex()) {
         // copy onto out's real component
-        // out.CompD[0] = rho_tmp.CompC[0]->Real();
-        // MSG_INFO("complex copying 1");
         rho_tmp.CompC[0]->Real()->deep_copy(out.CompD[0]);
-        // MSG_INFO("complex copying 2");
         delete rho_tmp.CompC[0];
-        // MSG_INFO("complex copying 3");
         rho_tmp.CompC[0] = nullptr;
-        // MSG_INFO("complex copying 4");
-        //     out.CompC[i] = nullptr; 
-        // for (int i = 0; i < out.Ncomp(); i++) {
-        //     out.CompD[i] = out.CompC[i]->Real();
-        //     // delete out.CompD[i];
-        //     delete out.CompC[i];
-        //     out.CompC[i] = nullptr; 
-        // }
         out.defreal();
-        // out.func_ptr->isreal = 1;
-        // out.func_ptr->iscomplex = 0;
     } else {
-        // MSG_INFO("real copying");
         //deep copy rho_tmp's value into out
         rho_tmp.CompD[0]->deep_copy(out.CompD[0]);
         delete rho_tmp.CompD[0];
         rho_tmp.CompD[0] = nullptr;
     }
-    // MSG_INFO("made density");
 }
 
 
