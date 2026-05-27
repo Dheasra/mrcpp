@@ -458,22 +458,30 @@ template <int D> void CompFunction<D>::setCplx(FunctionTree<D, ComplexDouble> *t
  *
  */
 template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp) {
+    // this->calcSquareNorm(); //test debug
     if (inp.getSquareNorm() < MachineZero) {
         // nothing to add
     } else if((this->getSquareNorm() < MachineZero) or (Ncomp() < inp.Ncomp())) {
+        MSG_INFO("tut"<< (this->getSquareNorm() < MachineZero)<< " "<<  (Ncomp() < inp.Ncomp()))
         //self empty, copy inp into self
         func_ptr->data = inp.func_ptr->data;
         alloc(inp.Ncomp(), true);
         for (int i = 0; i < inp.Ncomp(); i++) {
             //equivalent to copying and rescaling
+            //No need to include the prefactors c1 in this addition
+            //because they have been inherited from the inp
             if(inp.isreal()) CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
             if(inp.iscomplex()) CompC[i]->add_inplace(c, *inp.CompC[i]);
         }
+        //Set the norm to be what it should be, instead of the default 0
+        this->calcSquareNorm();
     } else {
         //adding inp to non-empty self
         for (int i = 0; i < inp.Ncomp(); i++) {
-            if (this->isreal() and inp.isreal() and std::abs((c*inp.func_ptr->data.c1[i]).imag()) < MachineZero) {
-                CompD[i]->add_inplace((c*inp.func_ptr->data.c1[i]).real(), *inp.CompD[i]);
+            if (this->isreal() and inp.isreal() and std::abs((c*inp.func_ptr->data.c1[i]/(*this).func_ptr->data.c1[i]).imag()) < MachineZero) {
+                //inplace addition, thus the output keeps its prefactor c1
+                //c1*out <- c1*out + c2*inp  means c1*out = c1*(out + c2*inp/c1)
+                CompD[i]->add_inplace((c*inp.func_ptr->data.c1[i]/(*this).func_ptr->data.c1[i]).real(), *inp.CompD[i]);
             } else {
                 if (this->isreal()) {
                     for (int comp = 0; comp < this->Ncomp(); comp++){
@@ -487,7 +495,9 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
                 if (inp.isreal()) { //provision in case inp is real and the coefficient c is not
                     inp.CompC[i] = inp.CompD[i]->CopyTreeToComplex();
                 }
-                CompC[i]->add_inplace(c*inp.func_ptr->data.c1[i], *inp.CompC[i]);
+                //as explained in the real case:
+                //c1*out <- c1*out + c2*inp  means c1*out = c1*(out + c2*inp/c1)
+                CompC[i]->add_inplace(c*inp.func_ptr->data.c1[i]/(*this).func_ptr->data.c1[i], *inp.CompC[i]);
                 if (inp.isreal()){ //restoring inp to what is was
                     delete inp.CompC[i];
                     inp.CompC[i] = nullptr;
