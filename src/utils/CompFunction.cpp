@@ -461,7 +461,7 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
     //check if the prefactors are zero, in which case,
     //delete tree, reallocate to zero and reset prefactor to one
     for (int i = 0; i < inp.Ncomp(); i++) {
-        if (std::abs((*this).func_ptr->data.c1[i].real)<MachineZero and std::abs((*this).func_ptr->data.c1[i]).imag<MachineZero) {
+        if (std::abs((*this).func_ptr->data.c1[i].real())<MachineZero and std::abs((*this).func_ptr->data.c1[i].imag()) < MachineZero) {
             this->alloc_comp(i, true);
             (*this).func_ptr->data.c1[i] = {1.0,0.0};
         }
