@@ -461,7 +461,7 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
     //check if the prefactors are zero, in which case,
     //delete tree, reallocate to zero and reset prefactor to one
     for (int i = 0; i < inp.Ncomp(); i++) {
-        if ((*this).func_ptr->data.c1[i].real<MachineZero and (*this).func_ptr->data.c1[i].imag<MachineZero) {
+        if (std::abs((*this).func_ptr->data.c1[i].real)<MachineZero and std::abs((*this).func_ptr->data.c1[i]).imag<MachineZero) {
             this->alloc_comp(i, true);
             (*this).func_ptr->data.c1[i] = {1.0,0.0};
         }
@@ -478,8 +478,17 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
             //equivalent to copying and rescaling
             //No need to include the prefactors c1 in this addition
             //because they have been inherited from the inp
-            if(inp.isreal()) CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
-            if(inp.iscomplex()) CompC[i]->add_inplace(c, *inp.CompC[i]);
+            if(inp.isreal() and (std::abs(c.imag())<MachineZero)) CompD[i]->add_inplace(c.real(), *inp.CompD[i]);
+            else {
+                if (inp.isreal()) { //provision in case inp is real and the coefficient c is not
+                    inp.CompC[i] = inp.CompD[i]->CopyTreeToComplex();
+                }
+                CompC[i]->add_inplace(c, *inp.CompC[i]);
+                if (inp.isreal()){ //restoring inp to what is was
+                    delete inp.CompC[i];
+                    inp.CompC[i] = nullptr;
+                }
+            } 
         }
         //Set the norm to be what it should be, instead of the default 0
         this->calcSquareNorm();
