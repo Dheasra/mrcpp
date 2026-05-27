@@ -482,6 +482,11 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
             else {
                 if (inp.isreal()) { //provision in case inp is real and the coefficient c is not
                     inp.CompC[i] = inp.CompD[i]->CopyTreeToComplex();
+                    //out's type is copied from inp
+                    (*this).CompC[i] = (*this).CompD[i]->CopyTreeToComplex();
+                    delete (*this).CompD[i];
+                    (*this).CompD[i] = nullptr;
+                    this->defcomplex(); //will be called up to 4 times, but that's ok
                 }
                 CompC[i]->add_inplace(c, *inp.CompC[i]);
                 if (inp.isreal()){ //restoring inp to what is was
