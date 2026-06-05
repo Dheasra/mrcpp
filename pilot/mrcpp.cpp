@@ -474,6 +474,8 @@ int main(int argc, char **argv) {
     Psi_rotated.push_back(Psi_alt_4);
 
     mrcpp::rotate(Psi_rotated, rotator);
+    // multiply(Psi_alt_3, Psi_alt_3, *Psi_alt_1.CompD[0], 1e-3);
+    // multiply(Psi_alt_4, Psi_alt_4, *Psi_alt_2.CompC[1], 1e-3);
 
     ComplexDouble dotut3 = dot(Psi_rotated[0], Psi_alt_5);
     ComplexDouble dotut4 = dot(Psi_rotated[1], Psi_alt_5);
@@ -482,15 +484,17 @@ int main(int argc, char **argv) {
     std::cout << dotut3 << '\n';
     std::cout << dotut4 << '\n';
 
-    std::cout << "tut10" << Psi_rotated[0].Ncomp() << " " << Psi_rotated[1].Ncomp() << '\n';
+    std::cout << "tut10 " << Psi_rotated[0].Ncomp() << " " << Psi_rotated[1].Ncomp() << '\n';
     ComplexMatrix overlap_rotated = mrcpp::calc_overlap_matrix(Psi_rotated, Psi_vector);
-    std::cout << "Overlap matrix: " << '\n';
+    std::cout << "rotated Overlap matrix: " << '\n';
     for (int i = 0; i < overlap_rotated.rows(); ++i) {
         for (int j = 0; j < overlap_rotated.cols(); ++j) {
-            std::cout << overlap_rotated(i,j) << ", " << '\t';
+            std::cout << overlap_rotated(i,j)<<"="<<dot(Psi_rotated[i], Psi_vector[j]) << ", " << '\t';
         }
         std::cout << '\n';
     }
+
+    std::cout << "tut end" << std::endl;
 
     // mrcpp::CompFunction<3> Psi_tmp1(mra);
     // mrcpp::CompFunction<3> Psi_tmp2(mra);

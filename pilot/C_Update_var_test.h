@@ -67,7 +67,7 @@ void orthonormalize_orbitals(Orbital_Pointer_List &Psi_list, MultiResolutionAnal
     
 
 
-    ComplexMatrix Lowdin_matrix = calc_lowdin_matrix_2c(Psi_top_components, Psi_bottom_components);
+    ComplexMatrix Lowdin_matrix = calc_overlap_matrix(Psi_top_components, Psi_bottom_components);//place holder to stop the compiler from throwing an error, because idc about this file
     std::vector<ComplexDouble> Lowdin_matrix_row(6);
 
     if (debug){
