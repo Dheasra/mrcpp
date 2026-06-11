@@ -8,7 +8,7 @@
 namespace mrcpp {
     //NOTE: These functions assume that the input functions are spinors, i.e. they have either 2 or 4 components and are complex valued.
 
-    CompFunction<3> apply_alpha(const CompFunction<3> &inp, int pauli, bool conjugate = false);
+    template<int D> void apply_gamma(CompFunction<D> &inp, int index);
 
     // orginial implementation of apply_alpha, may be more efficient because everything is done by reference, but it doesn't work in mrchem
     void apply_Pauli(CompFunction<3> &out, CompFunction<3> &inp, int pauli, double prec = -1.0, bool conjugate = false);

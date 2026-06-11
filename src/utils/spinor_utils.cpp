@@ -15,100 +15,58 @@ using namespace std::complex_literals;
 
 namespace mrcpp {
 
-    CompFunction<3> apply_alpha(const CompFunction<3> &inp, int alpha, bool conjugate) {
-        MSG_ABORT("UNIMPLEMENTED -- USE APPLY PAULI OR UPDATE THIS FUNCTION")
-        // Implementation of applying Alpha/Pauli matrices to spinor functions 
-        // The difference between this and apply_pauli is that this one returns a value instead of taking the output by reference
-        // This function will modify 'out' based on the Alpha matrix specified by 'Alpha'
-        // and the input function 'inp'.
-        // The 'prec' parameter is used for precision control.
-        // The 'conjugate' parameter indicates whether to apply conjugation.
-        ComplexDouble comp_i(0.0, 1.0); // Define the imaginary unit
-        CompFunction<3> out(inp);
-        switch (alpha) {
+    /** @brief in-place application of Pauli/Gamma matrices to a CompFunction 
+     *  @param inp: input (and output) CompFunction, passed by reference, will be modified
+     *  @param index: integer index of the gamma matrix to be applied. 0 is the identity. 5 is not yet implemented
+     *  
+     * WARNING: 4C/Gamma matrices are not implemented. Only 2C/Pauli matrices are, currently.
+     */
+    template<int D> void apply_gamma(CompFunction<D> &inp, int index) {
+        ComplexDouble comp_i(0.0, 1.0); // Define the imaginary unit for convenience later
+        switch (index) {
         case 0:
             //Identity, base case, nothing to apply
             break;
         case 1:
-            // Apply Alpha-X matrix
+            // Apply sigma_X matrix
+            // Basically amounts to swapping first and second components
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                if (inp.isreal() == 1) {
-                    out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
-                    // Warning: shallow copy
-                    out.CompD[i] = inp.CompD[i+1];
-                    out.CompD[i+1] = inp.CompD[i];
-                    // out.setReal(inp.CompD[i+1], i);
-                    // out.setReal(inp.CompD[i], i+1);
-
-                } else {
-                    out.defcomplex(); // Safety catch for later operations on out. If the input is complex, the output should also be defined as complex
-                    // Warning: shallow copy
-                    out.CompC[i] = inp.CompC[i+1];
-                    out.CompC[i+1] = inp.CompC[i];
-                    // out.setCplx(inp.CompC[i+1], i);
-                    // out.setCplx(inp.CompC[i], i+1);
-                }
-                // coefficient multiplication needn't be done separately for real and complex cases, since the coefficient is purely imaginary, so it will just be multiplied to the complex part of the function, even if the function is defined as real. However, we need to make sure that the output function is defined as complex in this case, otherwise we might run into issues later on when trying to multiply it by a complex coefficient. 
-                out.func_ptr->data.c1[i] = inp.func_ptr->data.c1[i+1];
-                out.func_ptr->data.c1[i+1] = inp.func_ptr->data.c1[i];
+                //swapping trees
+                std::swap(inp.CompD[i], inp.CompD[i+1]);
+                std::swap(inp.CompC[i], inp.CompC[i+1]);
+                //swapping tree metadata
+                std::swap(inp.func_ptr->data.Nchunks[i], inp.func_ptr->data.Nchunks[i+1]);
+                //swapping prefactors
+                std::swap(inp.func_ptr->data.c1[i], inp.func_ptr->data.c1[i+1]);
             }
             break;
         case 2:
-            // Apply Alpha-Y matrix
-            // std::cout << "apply Alpha Y tut0 " << out.Ncomp() << " " << inp.Ncomp() << '\n';
+            // Apply sigma_Y matrix
+            // Amounts to swapping first and second components, and multiplying former by i and the latter by -i
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                // std::cout << "Applying Alpha-Y matrix " << i << " " << inp.isreal() << std::endl;
-                if (inp.isreal() == 1) {
-                    out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
-                    // Warning: shallow copy
-                    out.setReal(inp.CompD[i+1], i);
-                    out.setReal(inp.CompD[i], i+1);
-                    // out.CompD[i] = inp.CompD[i+1];
-                    // out.CompD[i+1] = inp.CompD[i];
-
-                } else {
-                    out.defcomplex(); // Safety catch for later operations on out. If the input is complex, the output should also be defined as complex
-                    // Warning: shallow copy
-                    out.setCplx(inp.CompC[i+1], i);
-                    out.setCplx(inp.CompC[i], i+1);
-                    // out.CompC[i] = inp.CompC[i+1];
-                    // out.CompC[i+1] = inp.CompC[i];
-                }
-                // coefficient multiplication needn't be done separately for real and complex cases, since the coefficient is purely imaginary, so it will just be multiplied to the complex part of the function, even if the function is defined as real. However, we need to make sure that the output function is defined as complex in this case, otherwise we might run into issues later on when trying to multiply it by a complex coefficient.
-                out.func_ptr->data.c1[i] = inp.func_ptr->data.c1[i+1] * (-1.0)*comp_i;
-                out.func_ptr->data.c1[i+1] = inp.func_ptr->data.c1[i] * comp_i;
+                //swapping trees
+                std::swap(inp.CompD[i], inp.CompD[i+1]);
+                std::swap(inp.CompC[i], inp.CompC[i+1]);
+                //swapping tree metadata
+                std::swap(inp.func_ptr->data.Nchunks[i], inp.func_ptr->data.Nchunks[i+1]);
+                //swapping prefactors
+                std::swap(inp.func_ptr->data.c1[i], inp.func_ptr->data.c1[i+1]);
+                //multiplying the 1st and 2nd prefactors by the complex unit ±i
+                inp.func_ptr->data.c1[i] *= (-1.0*comp_i);
+                inp.func_ptr->data.c1[i+1] *= comp_i;
             }
             break;
         case 3:
             // Apply Alpha-Z matrix
+            // nothing to do except multiply the second element's prefactor by -1
             for (int i = 0; i < inp.Ncomp(); i = i + 2) {
-                if (inp.isreal() == 1) {
-                    out.defreal(); // Safety catch for later operations on out. If the input is real, the output should also be defined as real
-                    // Warning: shallow copy
-                    out.setReal(inp.CompD[i], i); 
-                    out.setReal(inp.CompD[i+1], i+1); 
-                    // out.CompD[i] = inp.CompD[i+1];
-                    // out.CompD[i+1] = inp.CompD[i];
-
-                } else {
-                    out.defcomplex(); // Safety catch for later operations on out. If the input is complex, the output should also be defined as complex
-                    // Warning: shallow copy
-                    out.setCplx(inp.CompC[i], i); 
-                    out.setCplx(inp.CompC[i+1], i+1); 
-                    // out.CompC[i] = inp.CompC[i+1]; 
-                    // out.CompC[i+1] = inp.CompC[i];
-                }
-                out.func_ptr->data.c1[i] = inp.func_ptr->data.c1[i];
-                // out.CompC[i+1] = inp.CompC[i+1]; 
-                // out.CompC[i+1]->rescale(-1.0);
-                out.func_ptr->data.c1[i+1] = inp.func_ptr->data.c1[i+1] * (-1.0);
-                // out.func_ptr->data.c1[i+1] *= -1.0;
+                inp.func_ptr->data.c1[i+1] *= -1.0;
             }
             break;
         default:
-            std::cerr << "Invalid Alpha matrix index, values must be 0,1,2,3. Current value: " << alpha << std::endl;
+            //identity case again. Nothing to apply.
+            break;
         }
-        return out;
     }
     
     /*
@@ -279,4 +237,6 @@ namespace mrcpp {
     //     Phi_b.clear();
     //     return out;
     // }
+
+    template void apply_gamma(CompFunction<3> &inp, int index);
 }
