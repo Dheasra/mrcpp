@@ -1,3 +1,28 @@
+/*
+ * MRCPP, a numerical library based on multiresolution analysis and
+ * the multiwavelet basis which provide low-scaling algorithms as well as
+ * rigorous error control in numerical computations.
+ * Copyright (C) 2021 Stig Rune Jensen, Jonas Juselius, Luca Frediani and contributors.
+ *
+ * This file is part of MRCPP.
+ *
+ * MRCPP is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * MRCPP is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with MRCPP.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * For information on the complete list of contributors to MRCPP, see:
+ * <https://mrcpp.readthedocs.io/>
+ */
+
 #include "CompFunction.h"
 #include "Bank.h"
 #include "Printer.h"
@@ -523,6 +548,15 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
     }
 }
 
+template <int D> void CompFunction<D>::upgradeToComplex(){
+    for (int i = 0; i < Ncomp(); i++) {
+        CompC[i] = CompD[i]->CopyTreeToComplex();
+        delete CompD[i];
+        CompD[i] = nullptr;
+    }
+    func_ptr->iscomplex = 1;
+    func_ptr->isreal = 0;
+}    
 template <int D> int CompFunction<D>::crop(double prec, bool absPrec) {
     if (prec < 0.0) return 0;
     int nChunksremoved = 0;
@@ -539,6 +573,8 @@ template <int D> int CompFunction<D>::crop(double prec, bool absPrec) {
 /** @brief In place multiply with scalar. Fully in-place.*/
 template <int D> void CompFunction<D>::rescale(ComplexDouble c) {
     bool need_to_rescale = not(isShared()) or mpi::share_master();
+    bool need_complex_functions = ((abs(c.imag()) > MachineZero) and isreal());
+    if(need_complex_functions) upgradeToComplex();
     if (need_to_rescale) {
         if (iscomplex()) {
             for (int i = 0; i < Ncomp(); i++) {
@@ -870,6 +906,7 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
             // if one of the input is real, we simply make a new complex copy of it
             // bool inp_aisReal = inp_a.isreal();
             // bool inp_bisReal = inp_b.isreal();
+            // Here, we keep the real trees of the inputs, as well as creating the complex ones, to avoid copying the trees back after multiplication. We restore the original state of the inputs after multiplication.
             if (inp_aisReal) {
                 //NOTE! No need to copy every component right now as we will only use the current component
                 inp_a.CompC[comp] = inp_a.CompD[comp]->CopyTreeToComplex();
@@ -922,7 +959,7 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
             }
         }
     }
-    // restore original tree
+    // restore original tree by deleting the temporary complex tree. The real tree still exists, but is not used in the multiplication.
     if (inp_aisReal and inp_bisReal){
         if (inp_aisReal) {
             for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
