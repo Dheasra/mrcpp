@@ -355,8 +355,6 @@ template <int D> void CompFunction<D>::free() {
         if (CompC[i] != nullptr) delete CompC[i];
         CompD[i] = nullptr;
         CompC[i] = nullptr;
-        // if (CompD[i] != nullptr) CompD[i]->clear();
-        // if (CompC[i] != nullptr) CompC[i]->clear();
     }
     if (this->func_ptr->shared_mem_real) this->func_ptr->shared_mem_real->clear();
     if (this->func_ptr->shared_mem_cplx) this->func_ptr->shared_mem_cplx->clear();
@@ -396,7 +394,6 @@ template <int D> void CompFunction<D>::dagger() {
 }
 
 template <int D> FunctionTree<D, double> &CompFunction<D>::real(int i) {
-    // std::cout << "CompFunction::real not const real: i " << i << std::endl;
     if (!isreal()) MSG_ABORT("not real function");
     if (CompD[i] == nullptr) alloc_comp(i);
     return *CompD[i];
@@ -416,7 +413,6 @@ template <int D> FunctionTree<D, ComplexDouble> &CompFunction<D>::complex(int i)
 }
 
 template <int D> const FunctionTree<D, double> &CompFunction<D>::real(int i) const {
-    // std::cout << "CompFunction::real const real: i " << i << std::endl;
     if (!isreal()) MSG_ABORT("not real function");
     return *CompD[i];
 }
@@ -466,11 +462,9 @@ template <int D> void CompFunction<D>::add(ComplexDouble c, CompFunction<D> inp)
             (*this).func_ptr->data.c1[i] = {1.0,0.0};
         }
     }
-    // this->calcSquareNorm(); //test debug
     if (inp.getSquareNorm() < MachineZero) {
         // nothing to add
     } else if((this->getSquareNorm() < MachineZero) or (Ncomp() < inp.Ncomp())) {
-        MSG_INFO("tut"<< (this->getSquareNorm() < MachineZero)<< " "<<  (Ncomp() < inp.Ncomp()))
         //self empty, copy inp into self
         func_ptr->data = inp.func_ptr->data;
         alloc(inp.Ncomp(), true);
