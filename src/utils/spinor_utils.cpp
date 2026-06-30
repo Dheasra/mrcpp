@@ -69,7 +69,7 @@ namespace mrcpp {
         }
     }
     
-    /*
+    /** DEPRECATED -
      * @brief: shuffles the indices of a spinor, simulating the application of a Dirac matrix to it
      * pauli represents the index of the Dirac matrices.
      * For scalar operators, it is unused.
@@ -78,6 +78,7 @@ namespace mrcpp {
     */
     //TODO: Add a provision in case inp and out are identical 
     void apply_Pauli(CompFunction<3> &out, CompFunction<3> &inp, int pauli, double prec, bool conjugate) { //NOTE: assumes 2-component spinors for now
+        MSG_WARN("DEPRECATED METHOD - USE apply_gamma INSTEAD");
         // Implementation of applying Pauli matrices to spinor functions
         // This function will modify 'out' based on the Pauli matrix specified by 'pauli'
         // and the input function 'inp'.
@@ -156,6 +157,68 @@ namespace mrcpp {
             MSG_ABORT("Invalid Pauli matrix index, values must be 0,1,2,3. Current value: " << pauli);
         }
     }
+
+    
+    /** @brief Compute the complete overlap matrix of a set of spinors subject to Kramers time-reversal symmetry.
+     *    
+     *  S = ( A  B )
+     *      (-B* A*)
+     *  with * denoting the complex conjugate and
+     *  A_ij = <bra_i | ket_j> = <K bra_i | K ket_j>^* 
+     *  B_ij = <bra_i | K ket_j> = -<K bra_i | ket_j>^* 
+     *  and K the anti-unitary time-reversal operator (2C spinor space here) K = -i σ_y Conj 
+     *  (Conj being the complex conjugation operator) 
+     */
+    ComplexMatrix calc_kramers_overlap_matrix(CompFunctionVector &bra, CompFunctionVector &ket){
+        //Useful variables
+        int N = bra.size();
+        int M = ket.size();
+
+        // ==== Compute the A block 
+        ComplexMatrix A = calc_overlap_matrix(bra, ket); //N x N block 
+
+        // ==== Compute the B block
+        // -- first compute the time-reversed ket
+        // CompFunctionVector Kket;
+        ComplexMatrix B(N, M); //another N x N block
+        //We manually compute the matrix rather than using the calc_overlap_matrix agains
+        //to save memory and because the time-reversal is cheap to compute on the fly
+        for (int j=0; j < M; j++){
+            //temp variable to hold the time-reversed ket
+            CompFunction<3> Kket_j; 
+            deep_copy(Kket_j, ket[j]);
+            // Complex conjugate the copy of ket[j]
+            Kket_j.conj(); //note: only changes a flag that will affect the dot product. Would be problematic if the rest of the time-reversal was imaginary, as it would be conjugated too during the dot. 
+            // apply σ_y (2C ONLY) to it
+            if (ket[j].Ncomp()>2) MSG_WARN("ONLY IMPLEMENTED FOR 2C!");
+            apply_gamma(Kket_j, 2); //σ_y
+            //multiply by -i
+            ComplexDouble cplx_i = {0.0, 1.0}; 
+            Kket_j.func_ptr->data.c1[0] *= -cplx_i;
+            Kket_j.func_ptr->data.c1[1] *= -cplx_i;
+            // -- compute an element of B
+            for (int i=0; i < N; i++){
+                B(i,j) = dot(bra[i], Kket_j);
+            }
+        }
+        
+        // == fill the total overlap matrix
+        ComplexMatrix S(2*N, 2*M); //2N x 2N matrix
+        for (int i=0; i < N; i++){
+            for (int j=0; j < M; j++){
+                //fill the upper left block A
+                S(i, j) = A(i,j);
+                //fill the upper right block B
+                S(i, M+j) = B(i,j);
+                //fill the lower left block -B^* 
+                S(N+i, j) = -1.0 * std::conj(B(i,j));
+                //fill the lower right block A^*
+                S(N+i, M+j) = std::conj(A(i,j));
+            }
+        }
+        return S;
+    }
+
     
     void normalize_spinor(CompFunction<3> &inp, double prec) {
         // Implementation of normalization for spinor functions
@@ -181,62 +244,6 @@ namespace mrcpp {
             }
         }
     }
-
-    // @brief Disjoining (filetering out) scalar paired orbitals in the vector of spinors Phi
-    // The elements of Phi that have n1[spin]==1 are moved to the output vector, while the others remain in Phi, with ownership transferred as needed.
-    // @param Phi: vector of spinors to be disjoined
-    // @param spin: index of the spin component to filter by (0 for alpha, 1 for beta) (For scalar and 2C calculations). For 4C spinors, we also have 2 is alpha small component and 3 is beta small component. 
-    // CompFunctionVector disjoin(CompFunctionVector &Phi, int spin) {
-    //     CompFunctionVector out;
-    //     CompFunctionVector tmp;
-    //     for (auto &i : Phi) {
-    //         if (i.func_ptr->data.n1[spin] == 1) { //checking if the element's spin is the desired one and transferring it to out (with ownership)
-    //             if (i.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) { 
-    //                 // need to send orbital from owner to new owner
-    //                 if (mrcpp::mpi::my_func(i)) { mrcpp::mpi::send_function(i, out.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
-    //                 if (mrcpp::mpi::my_func(out.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
-    //             }
-    //             i.setRank(out.size());
-    //             out.push_back(i);
-    //         } else { //otherwise transferring it to tmp, also with ownership.
-    //             if (i.getRank() % mrcpp::mpi::wrk_size != tmp.size() % mrcpp::mpi::wrk_size) {
-    //                 // need to send orbital from owner to new owner
-    //                 if (mrcpp::mpi::my_func(i)) { mrcpp::mpi::send_function(i, tmp.size() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
-    //                 if (mrcpp::mpi::my_func(tmp.size())) { mrcpp::mpi::recv_function(i, i.getRank() % mrcpp::mpi::wrk_size, i.getRank(), mrcpp::mpi::comm_wrk); }
-    //             }
-    //             i.setRank(tmp.size());
-    //             tmp.push_back(i);
-    //         }
-    //     }
-    //     Phi.clear();
-    //     Phi = tmp;
-    //     return out;
-    // }
-    
-    // CompFunctionVector adjoin(CompFunctionVector &Phi_a, CompFunctionVector &Phi_b) {
-    //     CompFunctionVector out;
-    //     for (auto &phi : Phi_a) {
-    //         if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
-    //             // need to send orbital from owner to new owner
-    //             if (mrcpp::mpi::my_func(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
-    //             if (mrcpp::mpi::my_func(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
-    //         }
-    //         phi.setRank(out.size());
-    //         out.push_back(phi);
-    //     }
-    //     for (auto &phi : Phi_b) {
-    //         if (phi.getRank() % mrcpp::mpi::wrk_size != out.size() % mrcpp::mpi::wrk_size) {
-    //             // need to send orbital from owner to new owner
-    //             if (mrcpp::mpi::my_func(phi)) { mrcpp::mpi::send_function(phi, out.size() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
-    //             if (mrcpp::mpi::my_func(out.size())) { mrcpp::mpi::recv_function(phi, phi.getRank() % mrcpp::mpi::wrk_size, phi.getRank(), mrcpp::mpi::comm_wrk); }
-    //         }
-    //         phi.setRank(out.size());
-    //         out.push_back(phi);
-    //     }
-    //     Phi_a.clear();
-    //     Phi_b.clear();
-    //     return out;
-    // }
 
     template void apply_gamma(CompFunction<3> &inp, int index);
 }

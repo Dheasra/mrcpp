@@ -1222,7 +1222,7 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
  */
 // template <int D> ComplexDouble dot(CompFunction<D> bra, CompFunction<D> ket) {
 template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunction<D> &ket) {
-    if (bra.func_ptr->conj or ket.func_ptr->conj) MSG_ABORT("Not implemented");
+    // if (bra.func_ptr->conj or ket.func_ptr->conj) MSG_ABORT("Not implemented"); //Not true, it is implemented in FunctionNode
     ComplexDouble dotprodtot = 0.0;
     for (int comp = 0; comp < bra.Ncomp(); comp++) {
         ComplexDouble dotprod = 0.0;
