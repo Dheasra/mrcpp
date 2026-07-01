@@ -628,8 +628,8 @@ template class CompFunction<3>;
 template <int D> void CopyToComplex(CompFunction<D> &out, const CompFunction<D> &inp) {
     out.func_ptr->data = inp.func_ptr->data;
     out.defcomplex();
-    out.func_ptr->data.isreal = 0;
-    out.alloc(inp.Ncomp());
+    // out.func_ptr->data.isreal = 0;
+    // out.alloc(inp.Ncomp()); //unnecessary and might cause a small memory leak
     if (inp.getNNodes() == 0) return;
     for (int i = 0; i < inp.Ncomp(); i++) {
         if (inp.isreal()) {
@@ -835,7 +835,9 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
     //making sure that out is real and clear the rest
     if (rho_tmp.iscomplex()) {
         // copy onto out's real component
-        rho_tmp.CompC[0]->Real()->deep_copy(out.CompD[0]);
+        auto *realPart = rho_tmp.CompC[0]->Real(); //due to Real() returning a raw pointer, we have to create a temp variable to avoid a memory leak
+        realPart->deep_copy(out.CompD[0]);
+        delete realPart;
         delete rho_tmp.CompC[0];
         rho_tmp.CompC[0] = nullptr;
         out.defreal();
@@ -960,23 +962,21 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
         }
     }
     // restore original tree by deleting the temporary complex tree. The real tree still exists, but is not used in the multiplication.
-    if (inp_aisReal and inp_bisReal){
-        if (inp_aisReal) {
-            for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
-                delete inp_a.CompC[comp];
-                inp_a.CompC[comp] = nullptr;
-            }
-            inp_a.func_ptr->iscomplex = false;
-            inp_a.func_ptr->isreal = true;
+    if (inp_aisReal) {
+        for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
+            delete inp_a.CompC[comp];
+            inp_a.CompC[comp] = nullptr;
         }
-        if (inp_bisReal) {
-            for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
-                delete inp_b.CompC[comp];
-                inp_b.CompC[comp] = nullptr;
-            }
-            inp_b.func_ptr->iscomplex = false;
-            inp_b.func_ptr->isreal = true;
+        inp_a.func_ptr->iscomplex = false;
+        inp_a.func_ptr->isreal = true;
+    }
+    if (inp_bisReal) {
+        for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
+            delete inp_b.CompC[comp];
+            inp_b.CompC[comp] = nullptr;
         }
+        inp_b.func_ptr->iscomplex = false;
+        inp_b.func_ptr->isreal = true;
     }
     mpi::share_function(out, 0, 9911, mpi::comm_share);
 }
@@ -1021,7 +1021,7 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, double> &in
     CompFunction<D> func_a;
     func_a.func_ptr->isreal = 1;
     func_a.func_ptr->iscomplex = 0;
-    func_a.alloc(1);
+    // func_a.alloc(1);
     func_a.CompD[0] = &inp_a;
     multiply(out, func_a, f, prec, nrefine, conjugate);
     func_a.CompD[0] = nullptr;
@@ -1096,14 +1096,12 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
                     out.func_ptr->iscomplex = 1;
                     out.func_ptr->isreal = 0;
                     delete out.CompD[comp];
-                    delete out.CompC[comp];
-                    // if (!out_allocated) out.alloc(out.Ncomp()); //moved outside the loop
+                    delete out.CompC[comp]; //maybe a problem with use-after-free? 
                     build_grid(*out.CompC[comp], *inp_a.CompC[comp]);
                     // build_grid(*out.CompC[comp], inp_b);
                     mrcpp::multiply(prec, *out.CompC[comp], coef, *inp_a.CompC[comp], *pointer_to_inp_b_comp, 0, false, false, conjugate);
                 } else { // note that this assumes Ncomp=1
                     // Adaptive grid
-                    // MSG_INFO("improvise adapt overcome");
                     if (out.CompD[comp] != nullptr) { // NB: func_ptr has alreadybeen overwritten!
                         if (out.CompD[comp]->getNNodes() > 0) {
                             out.CompC[comp] = out.CompD[comp]->CopyTreeToComplex();
@@ -1114,12 +1112,10 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
                         } else {
                             out.func_ptr->iscomplex = 1;
                             out.func_ptr->isreal = 0;
-                            // out.alloc(out.Ncomp()); //debug test moved outside the loop
                         }
                     } else {
                         out.func_ptr->iscomplex = 1;
                         out.func_ptr->isreal = 0;
-                        // if (!out_allocated) out.alloc(out.Ncomp());
                     }
                     mrcpp::multiply(prec, *out.CompC[comp], coef, *inp_a.CompC[comp], *pointer_to_inp_b_comp, -1, absPrec, useMaxNorms, conjugate);
                 }
@@ -1175,7 +1171,7 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
                 out.func_ptr->iscomplex = 1;
                 out.func_ptr->isreal = 0;
                 delete out.CompD[comp];
-                delete out.CompC[comp];
+                delete out.CompC[comp];  //maybe a problem with use-after-free? 
                 // if (!out_allocated) out.alloc(inp_a.Ncomp());
                 build_grid(*out.CompC[comp], *inp_a.CompC[comp]);
                 // build_grid(*out.CompC[comp], inp_b);
@@ -1820,14 +1816,17 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     int M = Psi.size();
 
     //Rescaling the trees with their prefactors c1 (which might make them complex, hence why we do it here)
+    // NOTE: I have not taken MPI into consideration here, this needs to be changed to work with it
     for (int i=0; i < N; i++){
         for (int q=0; q<Phi[i].Ncomp();q++){
-            if (Phi[i].isreal() and ((Phi[i].func_ptr->data.c1[q]).imag()<MachineZero)) {
+            if (Phi[i].isreal() and (std::abs(Phi[i].func_ptr->data.c1[q].imag())<MachineZero)) {
                 Phi[i].CompD[q]->rescale((Phi[i].func_ptr->data.c1[q]).real());
             } else {
                 if (Phi[i].isreal()) {
                     for (int comp=0; comp<Phi[i].Ncomp();comp++){
-                        Phi[i].CompC[q] = Phi[i].CompD[q]->CopyTreeToComplex();
+                        Phi[i].CompC[comp] = Phi[i].CompD[comp]->CopyTreeToComplex();
+                        delete Phi[i].CompD[comp];
+                        Phi[i].CompD[comp] = nullptr; 
                     }
                     Phi[i].defcomplex();
                 }
@@ -1838,6 +1837,34 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
             }
         }
     }
+
+    // tentative refactorisation of the loop above, but I don't think it is any better
+    // for (int i=0; i < N; i++){
+    //     if (Phi[i].isreal()){
+    //         for (int q=0; q<Phi[i].Ncomp();q++){
+    //             if ((Phi[i].func_ptr->data.c1[q]).imag()<MachineZero) {
+    //                 Phi[i].CompD[q]->rescale((Phi[i].func_ptr->data.c1[q]).real());
+    //             } else {
+    //                 Phi[i].CompC[q] = Phi[i].CompD[q]->CopyTreeToComplex();
+    //                 delete Phi[i].CompD[q];
+    //                 Phi[i].CompD[q] = nullptr;
+    //                 Phi[i].defcomplex(); //will be called up to 4 times but just a setter for a flag so it's ok.
+    //                 //Now that the tree is converted, rescaling
+    //                 Phi[i].CompC[q]->rescale(Phi[i].func_ptr->data.c1[q]);
+    //                 //Resetting the prefactor to 1, as it is now held in the tree itself
+    //                 Phi[i].func_ptr->data.c1[q] = {1.0,0.0};
+    //             }
+    //         }
+    //     } else {
+    //         for (int q=0; q<Phi[i].Ncomp();q++){
+    //             //Now that the tree is converted, rescaling
+    //             Phi[i].CompC[q]->rescale(Phi[i].func_ptr->data.c1[q]);
+    //             //Resetting the prefactor to 1, as it is now held in the tree itself
+    //             Phi[i].func_ptr->data.c1[q] = {1.0,0.0};
+                
+    //         }
+    //     }
+    // }
 
     //Handling complex case
     for (int i=0; i < N; i++) if (Phi[i].iscomplex()) iscomplex=true;
@@ -3039,7 +3066,7 @@ ComplexMatrix calc_overlap_matrix_cplx(CompFunctionVector &Bra, CompFunctionVect
     }
     if (ketisreal) {
         for (int i = 0; i < Ket.size(); i++) {
-            if (Bra[i].isreal()){
+            if (Ket[i].isreal()){
                 for (int comp = 0; comp< Ket[i].Ncomp(); comp++) {
                     Ket[i].CompC[comp] = Ket[i].CompD[comp]->CopyTreeToComplex();
                     delete Ket[i].CompD[comp];
