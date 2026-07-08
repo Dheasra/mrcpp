@@ -1056,10 +1056,6 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
     }
     double coef = 1.0;
 
-    // //complex inp_a case provisions (NOT WORKING for some reason)
-    // FunctionTree<D, ComplexDouble> *pointer_to_inp_b_comp = nullptr;
-    // if (inp_a.isreal()) inp_b.CopyTreeToComplex(pointer_to_inp_b_comp);
-
     if (!out_allocated) out.alloc(inp_a.Ncomp()); 
     for (int comp = 0; comp < inp_a.Ncomp(); comp++) {
         if (conjugate) {
@@ -1083,20 +1079,19 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
         } else {
             // inp_a is complex
             // therefore we need to create a complex copy of inp_b
-            // FunctionTree<D, ComplexDouble> inp_b_comp(inp_b.getMRA());
-            // inp_b_comp.CopyTree(inp_b);
-            FunctionTree<D, ComplexDouble> *pointer_to_inp_b_comp = nullptr; //seems to work but not the best place to initialize this
-            // std::shared_ptr<FunctionTree<D, ComplexDouble>> pointer_to_inp_b_comp = &inp_b_comp;
+            FunctionTree<D, ComplexDouble> *pointer_to_inp_b_comp = nullptr; //might not be the 
             pointer_to_inp_b_comp = inp_b.CopyTreeToComplex();
 
             ComplexDouble coef = 1.0;
             if (need_to_multiply) {
                 if (prec < 0.0) {
-                    // Union grid
+                    // Union grid 
                     out.func_ptr->iscomplex = 1;
                     out.func_ptr->isreal = 0;
                     delete out.CompD[comp];
-                    delete out.CompC[comp]; //maybe a problem with use-after-free? 
+                    // out.CompD[comp] = nullptr; //this should be added eventually but it makes the mrchem behave weirdly even if it never gets called
+                    delete out.CompC[comp]; 
+                    // out.CompC[comp] = new FunctionTree<D, ComplexDouble>(*defaultCompMRA<D>); //this should be added eventually but it makes the mrchem behave weirdly even if it never gets called
                     build_grid(*out.CompC[comp], *inp_a.CompC[comp]);
                     // build_grid(*out.CompC[comp], inp_b);
                     mrcpp::multiply(prec, *out.CompC[comp], coef, *inp_a.CompC[comp], *pointer_to_inp_b_comp, 0, false, false, conjugate);
@@ -1171,7 +1166,9 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
                 out.func_ptr->iscomplex = 1;
                 out.func_ptr->isreal = 0;
                 delete out.CompD[comp];
-                delete out.CompC[comp];  //maybe a problem with use-after-free? 
+                // out.CompD[comp] = nullptr; //this should be added eventually but it makes the mrchem behave weirdly even if it never gets called
+                delete out.CompC[comp];  
+                // out.CompC[comp] = new FunctionTree<D, ComplexDouble>(*defaultCompMRA<D>);//this should be added eventually but it makes the mrchem behave weirdly even if it never gets called
                 // if (!out_allocated) out.alloc(inp_a.Ncomp());
                 build_grid(*out.CompC[comp], *inp_a.CompC[comp]);
                 // build_grid(*out.CompC[comp], inp_b);
@@ -1815,9 +1812,16 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     int N = Phi.size();
     int M = Psi.size();
 
-    //Rescaling the trees with their prefactors c1 (which might make them complex, hence why we do it here)
-    // NOTE: I have not taken MPI into consideration here, this needs to be changed to work with it
+    // Rescaling the trees with their prefactors c1 (which might make them complex, hence why we do it here)
+    // we first syncronize all the number of components
+    // we assume that at least one orbital is owned by this MPI (TODO: allreduce)
+    int Ncomponents = 1;
+    for (int i = 0; i < N; i++) {
+        if (!mrcpp::mpi::my_func(i)) continue;
+        Ncomponents = std::max(Ncomponents, Phi[i].Ncomp());
+    }
     for (int i=0; i < N; i++){
+        if (!mrcpp::mpi::my_func(i)) continue;
         for (int q=0; q<Phi[i].Ncomp();q++){
             if (Phi[i].isreal() and (std::abs(Phi[i].func_ptr->data.c1[q].imag())<MachineZero)) {
                 Phi[i].CompD[q]->rescale((Phi[i].func_ptr->data.c1[q]).real());
@@ -1872,32 +1876,6 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
         rotate_cplx(Phi, U, Psi, prec);
         return;
     }
-
-
-    // MSG_INFO("Rotation matrix ");
-    // for (int a = 0; a < U.rows(); a++) {
-    //     for (int b = 0; b < U.cols(); b++) {
-    //         std::cout<< "Un(" << a << ", " << b << ") = " << U(a, b) << "; ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-    // ComplexMatrix shouldbeIdentity=U.conjugate().transpose()*U;
-    // for (int a = 0; a < shouldbeIdentity.rows(); a++) {
-    //     for (int b = 0; b < shouldbeIdentity.cols(); b++) {
-    //         std::cout<< "Id?(" << a << ", " << b << ") = " << shouldbeIdentity(a, b) << "; ";
-    //     }
-    //     std::cout << std::endl;
-    // }
-    // for (int q=0; q<Phi[0].Ncomp();q++){
-    //     //rotate the multiplicative coefficients c1 of the CompFunctionVector 
-    //     //create a vector of the input's coefficient for the current component q
-    //     ComplexVector c1_q(N);
-    //     for (int i=0; i<N; i++) c1_q[i] = Phi[i].func_ptr->data.c1[q];
-    //     //rotate this vector and store it in a new complex vector
-    //     ComplexVector rotated_c1_q = U*c1_q;
-    //     //set the output Psi's c1[q] to be the rotated c1
-    //     for (int i=0; i<M; i++) Psi[i].func_ptr->data.c1[q] = rotated_c1_q[i];
-    // }
 
     // The principle of this routine is that nodes are rotated one by one using matrix multiplication.
     // The routine does avoid when possible to move data, but uses pointers and indices manipulation.
