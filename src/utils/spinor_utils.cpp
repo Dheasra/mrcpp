@@ -179,10 +179,11 @@ namespace mrcpp {
 
         // ==== Compute the B block
         // -- first compute the time-reversed ket
-        // CompFunctionVector Kket;
-        ComplexMatrix B(N, M); //another N x N block
-        //We manually compute the matrix rather than using the calc_overlap_matrix agains
-        //to save memory and because the time-reversal is cheap to compute on the fly
+        // Build the time-reversed ket vector Kket, keeping the same
+        // per-index rank ownership as `ket` (mpi::my_func(j)) so that
+        // Kket has exactly the "owned vs. freed" shape calc_overlap_matrix
+        // already expects and handles under MPI.
+        CompFunctionVector Kket(M);
         for (int j=0; j < M; j++){
             //temp variable to hold the time-reversed ket
             CompFunction<3> Kket_j; 
@@ -196,12 +197,9 @@ namespace mrcpp {
             ComplexDouble cplx_i = {0.0, 1.0}; 
             Kket_j.func_ptr->data.c1[0] *= -cplx_i;
             Kket_j.func_ptr->data.c1[1] *= -cplx_i;
-            // -- compute an element of B
-            for (int i=0; i < N; i++){
-                B(i,j) = dot(bra[i], Kket_j);
-            }
+            Kket[j] = Kket_j;
         }
-        
+        ComplexMatrix B = calc_overlap_matrix(bra, Kket);
         // == fill the total overlap matrix
         ComplexMatrix S(2*N, 2*M); //2N x 2N matrix
         for (int i=0; i < N; i++){
