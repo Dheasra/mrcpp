@@ -353,7 +353,15 @@ void allreduce_matrix(ComplexMatrix &mat, MPI_Comm comm) {
 void send_function(const CompFunction<3> &func, int dst, int tag, MPI_Comm comm) {
 #ifdef MRCPP_HAS_MPI
     for (int i = 0; i < func.Ncomp(); i++) {
-        // make sure that Nchunks is up to date
+        // make sure that Nchunks is up to date; a component that has never been
+        // allocated (e.g. an orbital placeholder that hasn't been populated yet,
+        // as happens when disjoin()/adjoin() reassign ownership before the real
+        // data has been computed) has a null CompD/CompC and carries no data.
+        bool has_data = func.isreal() ? (func.CompD[i] != nullptr) : (func.CompC[i] != nullptr);
+        if (!has_data) {
+            func.Nchunks()[i] = 0;
+            continue;
+        }
         if (func.isreal())
             func.Nchunks()[i] = func.CompD[i]->getNChunks();
         else
@@ -361,6 +369,7 @@ void send_function(const CompFunction<3> &func, int dst, int tag, MPI_Comm comm)
     }
     MPI_Send(&func.func_ptr->data, sizeof(CompFunctionData<3>), MPI_BYTE, dst, 0, comm);
     for (int i = 0; i < func.Ncomp(); i++) {
+        if (func.Nchunks()[i] == 0) continue;
         if (func.isreal())
             mrcpp::send_tree(*func.CompD[i], dst, tag, comm, func.Nchunks()[i]);
         else
@@ -373,10 +382,20 @@ void send_function(const CompFunction<3> &func, int dst, int tag, MPI_Comm comm)
 void recv_function(CompFunction<3> &func, int src, int tag, MPI_Comm comm) {
 #ifdef MRCPP_HAS_MPI
     MPI_Status status;
-    int func_ncomp_in = func.Ncomp();
     MPI_Recv(&func.func_ptr->data, sizeof(CompFunctionData<3>), MPI_BYTE, src, 0, comm, &status);
     for (int i = 0; i < func.Ncomp(); i++) {
-        if (func_ncomp_in <= i) func.alloc(i + 1);
+        if (func.Nchunks()[i] == 0) {
+            // Sender has no data for this component (e.g. an orbital that hasn't been
+            // populated yet). Leave it null here too instead of allocating a stray
+            // empty tree - real data will be filled in later once it's actually computed.
+            continue;
+        }
+        // Allocate if this component's tree doesn't exist yet. Checking Ncomp() against i
+        // is not sufficient: a freshly-constructed placeholder orbital already reports its
+        // final Ncomp from construction (metadata only), while CompD/CompC stay null until
+        // real data is actually received for the first time.
+        bool has_tree = func.isreal() ? (func.CompD[i] != nullptr) : (func.CompC[i] != nullptr);
+        if (!has_tree) func.alloc(i + 1);
         if (func.isreal())
             mrcpp::recv_tree(*func.CompD[i], src, tag, comm, func.Nchunks()[i]);
         else

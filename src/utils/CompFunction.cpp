@@ -1212,25 +1212,25 @@ template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, Func
  *  Sum of component dots.
  *  Notice that the <bra| position is complex conjugated in the tree multiplication.
  *
+ *  NOTE: if the number of components do not match, the minimum of the two is taken. 
+ *  Doesn't throw an error or warning (despite making no mathematical sense), 
+ *  because it happens a lot when using MPI.
  */
 // template <int D> ComplexDouble dot(CompFunction<D> bra, CompFunction<D> ket) {
 template <int D> ComplexDouble dot(const CompFunction<D> &bra, const CompFunction<D> &ket) {
-    // if (bra.func_ptr->conj or ket.func_ptr->conj) MSG_ABORT("Not implemented"); //Not true, it is implemented in FunctionNode
-    if (bra.Ncomp() != ket.Ncomp()) MSG_WARN("Mismatched number of components: Ncomp_bra="<< bra.Ncomp() << "Ncomp_ket="<< ket.Ncomp() << ", taking the minimum between the two");
+    // if (bra.Ncomp() != ket.Ncomp()) MSG_WARN("Mismatched number of components: Ncomp_bra="<< bra.Ncomp() << ", Ncomp_ket="<< ket.Ncomp() << ", taking the minimum between the two");
     ComplexDouble dotprodtot = 0.0;
     for (int comp = 0; comp < std::min(bra.Ncomp(), ket.Ncomp()); comp++) {
         ComplexDouble dotprod = 0.0;
+        //Computing the dot product of the current components for each
+        //case of bra/ket being real or complex
         if (bra.isreal() and ket.isreal()) {
-            //Computing the dot product of the current components
             dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompD[comp]);
         } else if (bra.isreal() and ket.iscomplex()) {
-            //Computing the dot product of the current components
             dotprod += mrcpp::dot(*bra.CompD[comp], *ket.CompC[comp]);
         } else if (bra.iscomplex() and ket.isreal()) {
-            //Computing the dot product of the current components
             dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompD[comp]);
-        } else {
-            //Computing the dot product of the current components
+        } else { //both complex
             dotprod += mrcpp::dot(*bra.CompC[comp], *ket.CompC[comp]);
         }
         //Multiplying the dot product of the current components by the c1 coefficients
@@ -1882,6 +1882,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
 
     //Handling complex case
     for (int i=0; i < N; i++) {
+        if (mrcpp::mpi::my_func(i)) continue;
         if (Phi[i].iscomplex()) iscomplex=true;
     }
     if (iscomplex) {
@@ -1957,7 +1958,6 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
             save_nodes(Phi, refTree, nodesPhi, -1, q);
             mpi::barrier(mpi::comm_wrk); // required for now, as the blockdata functionality has no queue yet.
         }
-        // std::cout << "mrcpp::CompFunction::rotate post tut initital loop component " << q << " with Phi (1st argument) norm " << Phi[0].norm() << " with Psi norm " << Psi[0].norm() << std::endl;
 
         // 4) rotate all the nodes
         IntMatrix split_serial;                          // in the serial case all split are stored in one array
@@ -2197,7 +2197,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec) {
     //through this function.
     CompFunctionVector Psi(0);
     for (int i = 0; i < Phi.size(); i++){
-        // if (not mpi::my_func(j)) continue; //Maybe not necessary
+        if (not mpi::my_func(i)) continue; //Maybe not necessary
         auto testut1 = Phi[i].func_ptr->data;
         CompFunction<3> psi_tmp(Phi[i].func_ptr->data, false); 
         deep_copy(psi_tmp, Phi[i]); //make sure it is a separate object
