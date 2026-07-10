@@ -2611,7 +2611,6 @@ void SetdefaultMRA(MultiResolutionAnalysis<3> *MRA) {
 // }
 
 ComplexVector dot(CompFunctionVector &Bra, CompFunctionVector &Ket) {
-        std::cout <<mrcpp::mpi::wrk_rank<< " dot  bra ket start "<< std::endl;
     int N = Bra.size();
     ComplexVector result = ComplexVector::Zero(N);
     for (int i = 0; i < N; i++) {
