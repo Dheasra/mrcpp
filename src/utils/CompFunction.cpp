@@ -1882,7 +1882,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
 
     //Handling complex case
     for (int i=0; i < N; i++) {
-        if (mrcpp::mpi::my_func(i)) continue;
+        if (not mrcpp::mpi::my_func(i)) continue;
         if (Phi[i].iscomplex()) iscomplex=true;
     }
     if (iscomplex) {
