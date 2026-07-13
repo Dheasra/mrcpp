@@ -2197,16 +2197,15 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, double prec) {
     //create a deep_copy of the input, because the complex instance of rotate 
     //erase the output's trees, which creates a seg fault when it is called
     //through this function.
-    CompFunctionVector Psi(0);
-    for (int i = 0; i < Phi.size(); i++){
-        if (not mpi::my_func(i)) continue; //Maybe not necessary
-        auto testut1 = Phi[i].func_ptr->data;
-        CompFunction<3> psi_tmp(Phi[i].func_ptr->data, false); 
-        deep_copy(psi_tmp, Phi[i]); //make sure it is a separate object
-        Psi.push_back(psi_tmp);
+    CompFunctionVector Psi(Phi.size());
+    for (int i = 0; i < Phi.size(); i++) {
+        Psi[i] = Phi[i].paramCopy(); //shallow copy
+        deep_copy(Psi[i], Phi[i]); //make sure it is different
     }
     rotate(Psi, U, Phi, prec); 
-    // rotate(Phi, U, Phi, prec); 
+    //Note on MPI calls here for future reference (written by Claude):
+    // Full-size, index-preserving copy: deep_copy is a cheap no-op on
+    // non-owned (placeholder) slots, so this needs no MPI communication.
     return;
 }
 
