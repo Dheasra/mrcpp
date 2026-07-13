@@ -349,6 +349,17 @@ void allreduce_matrix(ComplexMatrix &mat, MPI_Comm comm) {
 #endif
 }
 
+/** @brief Returns the max of a value among all MPI ranks
+ *  Needed for instance to compute the number of components of CompFunctions in a vector.
+ */
+int allreduce_max(int local, MPI_Comm comm) {
+    int result = local;
+#ifdef MRCPP_HAS_MPI
+    MPI_Allreduce(&local, &result, 1, MPI_INT, MPI_MAX, comm);
+#endif
+    return result;
+}
+
 // send a component function with MPI
 void send_function(const CompFunction<3> &func, int dst, int tag, MPI_Comm comm) {
 #ifdef MRCPP_HAS_MPI

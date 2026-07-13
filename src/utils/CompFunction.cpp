@@ -1882,9 +1882,11 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
 
     //Handling complex case
     for (int i=0; i < N; i++) {
-        if (mrcpp::mpi::my_func(i)) continue;
+        if (not mrcpp::mpi::my_func(i)) continue;
         if (Phi[i].iscomplex()) iscomplex=true;
     }
+    iscomplex = mrcpp::mpi::allreduce_max(iscomplex ? 1 : 0, mrcpp::mpi::comm_wrk) > 0;
+
     if (iscomplex) {
         rotate_cplx(Phi, U, Psi, prec);
         return;
@@ -2859,6 +2861,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &BraKet) {
         if (!mrcpp::mpi::my_func(BraKet[k])) continue;
         if (BraKet[k].iscomplex()) is_complex = true;
     }
+    is_complex = mrcpp::mpi::allreduce_max(is_complex ? 1 : 0, mrcpp::mpi::comm_wrk) > 0;
     if (is_complex) { return calc_overlap_matrix_cplx(BraKet); }
 
     // If this point is reached, real case
@@ -3331,7 +3334,7 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
     int N = Bra.size();
     int M = Ket.size();
 
-    bool bracomplex, ketcomplex = false;
+    bool bracomplex = false, ketcomplex = false;
     for (int i=0; i < N; i++) {
         if (!mrcpp::mpi::my_func(Bra[i])) continue;
         if (Bra[i].iscomplex()) bracomplex = true;
@@ -3340,7 +3343,9 @@ ComplexMatrix calc_overlap_matrix(CompFunctionVector &Bra, CompFunctionVector &K
         if (!mrcpp::mpi::my_func(Ket[i])) continue;
         if (Ket[i].iscomplex()) ketcomplex = true;
     }
-    if (bracomplex or ketcomplex) { return calc_overlap_matrix_cplx(Bra, Ket); }
+    bool complexcase = bracomplex or ketcomplex;
+    complexcase = mrcpp::mpi::allreduce_max(complexcase ? 1 : 0, mrcpp::mpi::comm_wrk) > 0;
+    if (complexcase) return calc_overlap_matrix_cplx(Bra, Ket);
 
     mrcpp::mpi::barrier(mrcpp::mpi::comm_wrk); // for consistent timings
 
