@@ -250,8 +250,8 @@ void project(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, d
 void project_real(CompFunction<3> &out, std::function<double(const Coord<3> &r)> f, double prec); //overload of project is not always recognized by the compiler
 void project(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec, int comp = 0);
 void project_cplx(CompFunction<3> &out, std::function<ComplexDouble(const Coord<3> &r)> f, double prec); //overload of project is not always recognized by the compiler
-template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec, int comp = 0);
-template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec, int comp = 0);
+template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec, int nComp = 1);
+template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec, int nComp = 1);
 template <int D> void orthogonalize(double prec, CompFunction<D> &Bra, CompFunction<D> &Ket);
 
 // --- Class to hold a vector of CompFunction ---

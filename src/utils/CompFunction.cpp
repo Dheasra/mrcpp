@@ -320,7 +320,6 @@ template <int D> void CompFunction<D>::calcSquareNorm() {
 //  nalloc is the number of components allocated. ialloc=1 allocates one tree.
 //  deletes all old trees if found.
 template <int D> void CompFunction<D>::alloc(int nalloc, bool zero) {
-    // MSG_INFO("default MRA =" << defaultCompMRA<D>);
     if (defaultCompMRA<D> == nullptr) MSG_ABORT("Default MRA not yet defined");
     if (isreal() == 0 and iscomplex() == 0) MSG_ABORT("Function must be defined either real or complex");
     for (int i = 0; i < nalloc; i++) {
@@ -328,16 +327,13 @@ template <int D> void CompFunction<D>::alloc(int nalloc, bool zero) {
         delete CompC[i];
         CompD[i] = nullptr;
         CompC[i] = nullptr;
-        // MSG_INFO("Component MRA tut D =" << &(CompD[i]->getMRA()));
-        // MSG_INFO("Component MRA tut C =" << &(CompC[i]->getMRA()));
+
         if (isreal()) {
             CompD[i] = new FunctionTree<D, double>(*defaultCompMRA<D>, func_ptr->shared_mem_real);
-            // MSG_INFO("Component MRA def real=" << &(CompD[i]->getMRA()));
             if (zero) CompD[i]->setZero();
         }
         if (iscomplex()) {
             CompC[i] = new FunctionTree<D, ComplexDouble>(*defaultCompMRA<D>, func_ptr->shared_mem_cplx);
-            // MSG_INFO("Component MRA def comp=" << &(CompC[i]->getMRA()));
             if (zero) CompC[i]->setZero();
         }
         func_ptr->Ncomp = std::max(Ncomp(), i + 1);
@@ -1354,92 +1350,69 @@ void project_cplx(CompFunction<3> &out, std::function<ComplexDouble(const Coord<
 }
 
 
-/* @brief Project a RepresentableFunction onto a real-valued CompFunction
+/** @brief Project a RepresentableFunction onto a real-valued CompFunction
  * @param out Output CompFunction
  * @param f Input RepresentableFunction 
  * @param prec Precision for the projection
- * @param comp Component index to project onto
+ * @param nComp Number of components to project onto
  */
-template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec, int comp) {
-    //mpi shenanigans
+template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, double> &f, double prec, int nComp) {
+    //mpi ownership check
     bool need_to_project = not(out.isShared()) or mpi::share_master();
-    out.func_ptr->isreal = 1;
-    out.func_ptr->iscomplex = 0;
+    //real case
+    out.defreal();
 
-    // allocating a component if compFunction is empty
-    if (out.Ncomp() < 1) out.alloc(1);
-    // This variable ensures that scalar function do not allocate additional components
-    bool need_to_allocate = true;
-    if (out.Ncomp() < 2) {need_to_allocate = false;}
-
-    // lambda function when we need to initialise a component to zero
-    std::function<double(const Coord<D>&)> fzero = [](const Coord<D> &r) -> double { return 0.0; };
-
-    // allocating and projecting the component(s)
-    if (need_to_project) {
-        for (int i = 0; i < out.Ncomp(); i++) {
-            // std::cout << "CompFunction::project -- need to project comp " << i;
-            if (i == comp) {
-                out.alloc_comp(i);
-                build_grid(*out.CompD[i], f);
-                mrcpp::project<D, double>(prec, *out.CompD[i], f);
-            } else if (need_to_allocate) {
-                // build_grid(*out.CompD[i], fzero); // commented out as it is probably unnecessary for a zero function
-                out.alloc_comp(i);
-                mrcpp::project<D, double>(prec, *out.CompD[i], fzero);
-            }
-        }
+    //free + reallocate out. Its content (if any) was going to get trashed anyway
+    if (out.Ncomp() < 1 or nComp > out.Ncomp()) {
+        // allocating a component if compFunction is empty or if more components than are present must be projected
+        out.alloc(nComp, false);
+        out.func_ptr->data.Ncomp = nComp;
+    } else { // simply freeing the component(s)
+        out.alloc(out.Ncomp(), false);
     }
-    // // projections
-    // if (need_to_project) build_grid(*out.CompD[comp], f);
-    // if (need_to_project) {
-    //     out.alloc_comp(comp);
-    //     mrcpp::project<D, double>(prec, *out.CompD[comp], f);
-    // }
+    
+    // allocating and projecting the component(s)
+    if (need_to_project){
+        for(int c=0; c<nComp; c++) { // (;ºoº;) [c++] ¬-("o")   
+            build_grid(*out.CompD[c], f);
+            mrcpp::project<D, double>(prec, *out.CompD[c], f);
+        } 
+    }
+
     //mpi
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
 
-/* @brief Project a RepresentableFunction onto a complex-valued CompFunction
+/** @brief Project a complex RepresentableFunction onto a complex-defined CompFunction
  * @param out Output CompFunction
  * @param f Input RepresentableFunction 
  * @param prec Precision for the projection
- * @param comp Component index to project onto
+ * @param nComp Number of components to project onto
  */
-//TODO: update to handle multiple components like in the real case
-template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec, int comp) {
+template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, ComplexDouble> &f, double prec, int nComp) {
+    //mpi ownership check
     bool need_to_project = not(out.isShared()) or mpi::share_master();
-    out.func_ptr->isreal = 0;
-    out.func_ptr->iscomplex = 1;
+    //complex case
+    out.defcomplex();
 
-        // allocating a component if compFunction is empty
-    if (out.Ncomp() < 1) out.alloc(1);
-    // This variable ensures that scalar function do not allocate additional components
-    bool need_to_allocate = true;
-    if (out.Ncomp() < 2) {need_to_allocate = false;}
-
-    // lambda function when we need to initialise a component to zero
-    std::function<ComplexDouble(const Coord<D>&)> fzero = [](const Coord<D> &r) -> ComplexDouble { return ComplexDouble(0.0, 0.0); };
-
-    // allocating and projecting the component(s)
-    if (need_to_project) {
-        for (int i = 0; i < out.Ncomp(); i++) {
-            if (i == comp) {
-                out.alloc_comp(i);
-                build_grid(*out.CompC[i], f); 
-                mrcpp::project<D, ComplexDouble>(prec, *out.CompC[i], f);
-            } else if (need_to_allocate) {
-                // build_grid(*out.CompC[i], fzero); // commented out as it is probably unnecessary for a zero function
-                out.alloc_comp(i);
-                mrcpp::project<D, ComplexDouble>(prec, *out.CompC[i], fzero);
-            }
-        }
+    //free + reallocate out. Its content (if any) was going to get trashed anyway
+    if (out.Ncomp() < 1 or nComp > out.Ncomp()) {
+        // allocating a component if compFunction is empty or if more components than are present must be projected
+        out.alloc(nComp, false);
+        out.func_ptr->data.Ncomp = nComp;
+    } else { // simply freeing the component(s)
+        out.alloc(out.Ncomp(), false);
     }
-    // if (out.Ncomp() < 1) out.alloc(1);
-    // //projections onto the complex-valued components
-    // if (need_to_project) build_grid(*out.CompC[comp], f); 
-    // if (need_to_project) mrcpp::project<D, ComplexDouble>(prec, *out.CompC[comp], f);
-    //mpi 
+    
+    // allocating and projecting the component(s)
+    if (need_to_project){
+        for(int c=0; c<nComp; c++) { // (;ºoº;) [c++] ¬-("o")   
+            build_grid(*out.CompC[c], f);
+            mrcpp::project<D, ComplexDouble>(prec, *out.CompC[c], f);
+        } 
+    }
+
+    //mpi
     mpi::share_function(out, 0, 132231, mpi::comm_share);
 }
 
