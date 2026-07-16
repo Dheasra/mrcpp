@@ -805,8 +805,9 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
     //compute the density of each component of inp individually
     CompFunction<D> component_density(1, inp.Ncomp());
     component_density.func_ptr->data = inp.func_ptr->data; 
-    component_density.alloc(inp.Ncomp(), true);
-    multiply(prec, component_density, 1.0, inp, inp, -1, false, false, true);//todo: allouer les composantes de out avant de les ajouter ensemble
+    // component_density.alloc(inp.Ncomp(), true);
+    copy_grid(component_density, inp);
+    multiply(prec, component_density, 1.0, inp, inp, -1, false, false, true);
     
     //collect each component's density into a temporary density, which could be defined complex for the purpose of conversion.
     CompFunction<3> rho_tmp(1, 1); //one component CompFunction
@@ -822,10 +823,21 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
     if (rho_tmp.isreal() and rho_tmp.iscomplex()) MSG_ABORT("INPUT IS BOTH REAL AND COMPLEX; ERROR");
     rho_tmp.alloc(1, true);
     for (int i = 0; i < inp.Ncomp(); i++) {
-        if (not inp.iscomplex()){
+        if (inp.isreal() and std::abs(component_density.func_ptr->data.c1[i].imag())<MachinePrec){
             if (contrib[i]) rho_tmp.CompD[0]->add_inplace((component_density.func_ptr->data.c1[i]).real(), *component_density.CompD[i]);
         } else {
-            if (contrib[i]) rho_tmp.CompC[0]->add_inplace(component_density.func_ptr->data.c1[i], *component_density.CompC[i]);
+            if (contrib[i]) {
+                if (inp.isreal()) {
+                    //this loop will at most run once per call, because we change inp.isreal()==true to ==false
+                    for (int comp=0; comp < inp.Ncomp(); comp++){
+                        rho_tmp.CompC[comp] = rho_tmp.CompD[comp]->CopyTreeToComplex();
+                        delete rho_tmp.CompD[comp];
+                        rho_tmp.CompD[comp] = nullptr; 
+                    }
+                    rho_tmp.defcomplex();
+                }
+                rho_tmp.CompC[0]->add_inplace(component_density.func_ptr->data.c1[i], *component_density.CompC[i]);
+            }
         }
     }
     //making sure that out is real and clear the rest
@@ -908,19 +920,11 @@ template <int D> void multiply(double prec, CompFunction<D> &out, double coef, C
             if (inp_aisReal) {
                 //NOTE! No need to copy every component right now as we will only use the current component
                 inp_a.CompC[comp] = inp_a.CompD[comp]->CopyTreeToComplex();
-                // for (int comp_a=0; comp_a < inp_a.Ncomp(); comp_a ++){
-                    // delete inp_a.CompD[comp_a]; //don't delete, we will restore later
-                    // inp_a.CompD[comp_a] = nullptr;
-                // }
                 inp_a.func_ptr->iscomplex = true; //will be reverted later
                 inp_a.func_ptr->isreal = false;
             }
             if (inp_bisReal) {
                 inp_b.CompC[comp] = inp_b.CompD[comp]->CopyTreeToComplex();
-                // for (int comp_b=0; comp_b < inp_a.Ncomp(); comp_b ++){
-                    // delete inp_b.CompD[comp_b];
-                    // inp_b.CompD[comp_b] = nullptr;
-                // }
                 inp_b.func_ptr->iscomplex = true; //will be reverted later
                 inp_b.func_ptr->isreal = false;
             }
