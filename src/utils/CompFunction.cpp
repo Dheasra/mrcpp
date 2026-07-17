@@ -1801,6 +1801,13 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
     int N = Phi.size();
     int M = Psi.size();
 
+    // The principle of this routine is that nodes are rotated one by one using matrix multiplication.
+    // The routine does avoid when possible to move data, but uses pointers and indices manipulation.
+    // MPI version does not use OMP yet, Serial version uses OMP
+    // size of input is N, size of output is M
+    if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
+    if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
+
     // Rescaling the trees with their prefactors c1 (which might make them complex, hence why we do it here)
     // we first syncronize all the number of components
     // we assume that at least one orbital is owned by this MPI (TODO: allreduce)
@@ -1827,41 +1834,15 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
         }
     }
 
-    // tentative refactorisation of the loop above, but I don't think it is any better
-    // for (int i=0; i < N; i++){
-    //     if (Phi[i].isreal()){
-    //         for (int q=0; q<Phi[i].Ncomp();q++){
-    //             if ((Phi[i].func_ptr->data.c1[q]).imag()<MachineZero) {
-    //                 Phi[i].CompD[q]->rescale((Phi[i].func_ptr->data.c1[q]).real());
-    //             } else {
-    //                 Phi[i].CompC[q] = Phi[i].CompD[q]->CopyTreeToComplex();
-    //                 delete Phi[i].CompD[q];
-    //                 Phi[i].CompD[q] = nullptr;
-    //                 Phi[i].defcomplex(); //will be called up to 4 times but just a setter for a flag so it's ok.
-    //                 //Now that the tree is converted, rescaling
-    //                 Phi[i].CompC[q]->rescale(Phi[i].func_ptr->data.c1[q]);
-    //                 //Resetting the prefactor to 1, as it is now held in the tree itself
-    //                 Phi[i].func_ptr->data.c1[q] = {1.0,0.0};
-    //             }
-    //         }
-    //     } else {
-    //         for (int q=0; q<Phi[i].Ncomp();q++){
-    //             //Now that the tree is converted, rescaling
-    //             Phi[i].CompC[q]->rescale(Phi[i].func_ptr->data.c1[q]);
-    //             //Resetting the prefactor to 1, as it is now held in the tree itself
-    //             Phi[i].func_ptr->data.c1[q] = {1.0,0.0};
-                
-    //         }
-    //     }
-    // }
-
-    
-
     //Handling complex case
     for (int i=0; i < N; i++) {
+        //checking if the orbitals are complex
         if (not mrcpp::mpi::my_func(i)) continue;
         if (Phi[i].iscomplex()) iscomplex=true;
     }
+    //checking if the rotation matrix is complex-valued
+    iscomplex += (U.imag().cwiseAbs().maxCoeff() > mrcpp::MachineZero); //Cursed code brought to you by Niklas
+    //sync across mpi ranks
     iscomplex = mrcpp::mpi::allreduce_max(iscomplex ? 1 : 0, mrcpp::mpi::comm_wrk) > 0;
 
     if (iscomplex) {
@@ -1869,14 +1850,7 @@ void rotate(CompFunctionVector &Phi, const ComplexMatrix &U, CompFunctionVector 
         return;
     }
 
-    // The principle of this routine is that nodes are rotated one by one using matrix multiplication.
-    // The routine does avoid when possible to move data, but uses pointers and indices manipulation.
-    // MPI version does not use OMP yet, Serial version uses OMP
-    // size of input is N, size of output is M
-    if (U.rows() < N) MSG_ABORT("Incompatible number of rows for U matrix");
-    if (U.cols() < M) MSG_ABORT("Incompatible number of columns for U matrix");
-
-    // Computing the number of components for the 
+    // Computing the number of components of spinors in an MPI safe way
     int Ncomponents = 1;
     for (int i = 0; i < N; i++) {
         if (!mrcpp::mpi::my_func(i)) continue;
