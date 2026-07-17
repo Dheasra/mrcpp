@@ -1367,12 +1367,12 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, dou
     out.defreal();
 
     //free + reallocate out. Its content (if any) was going to get trashed anyway
-    if (out.Ncomp() < 1 or nComp > out.Ncomp()) {
+    if (out.Ncomp() < 1) {
         // allocating a component if compFunction is empty or if more components than are present must be projected
-        out.alloc(nComp, false);
+        out.alloc(nComp, true);
         out.func_ptr->data.Ncomp = nComp;
     } else { // simply freeing the component(s)
-        out.alloc(out.Ncomp(), false);
+        out.alloc(out.Ncomp(), true);
     }
     
     // allocating and projecting the component(s)
@@ -1400,12 +1400,12 @@ template <int D> void project(CompFunction<D> &out, RepresentableFunction<D, Com
     out.defcomplex();
 
     //free + reallocate out. Its content (if any) was going to get trashed anyway
-    if (out.Ncomp() < 1 or nComp > out.Ncomp()) {
+    if (out.Ncomp() < 1) {
         // allocating a component if compFunction is empty or if more components than are present must be projected
-        out.alloc(nComp, false);
+        out.alloc(nComp, true);
         out.func_ptr->data.Ncomp = nComp;
     } else { // simply freeing the component(s)
-        out.alloc(out.Ncomp(), false);
+        out.alloc(out.Ncomp(), true);
     }
     
     // allocating and projecting the component(s)
