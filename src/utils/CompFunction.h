@@ -240,6 +240,7 @@ template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, double> &in
 template <int D> void multiply(CompFunction<D> &out, FunctionTree<D, ComplexDouble> &inp_a, 
                                RepresentableFunction<D, ComplexDouble> &f, double prec, int nrefine = 0, 
                                bool conjugate = false);
+template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &bra, CompFunction<D> &ket, double prec, std::vector<bool> contrib = std::vector<bool>(4, true)); 
 template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec, std::vector<bool> contrib = std::vector<bool>(4, true)); 
 //multiplication rules for Potentials on spinors or other exclusively single component functions with CompFunctions
 template <int D> void multiply(CompFunction<D> &out, CompFunction<D> inp_a, FunctionTree<D, double> &inp_b, double prec, bool absPrec = false, bool useMaxNorms = false, bool conjugate = false);

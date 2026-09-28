@@ -787,7 +787,7 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
     }
 }
 
-/** @brief out = conj(inp) * inp
+/** @brief out = bra^\dagger * ket
  * 
  *  @param contrib: 4-vector of boolean selecting which components contribute to the density. By default a 4-vector of true.
  * 
@@ -795,41 +795,42 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
  * 
  *
  */
-template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec, std::vector<bool> contrib) {
+template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &bra,  CompFunction<D> &ket, double prec, std::vector<bool> contrib) {
     //provision in case inadequate contribution vector is provided, we just pad it with false
-    if (contrib.size() < inp.Ncomp()) {
+    if (contrib.size() < bra.Ncomp()) {
         MSG_WARN("Contribution vector is smaller than input's number of component, excess components will not contribute");
-        for (int i = contrib.size(); i < inp.Ncomp(); i++ ) contrib.push_back(false);
+        for (int i = contrib.size(); i < bra.Ncomp(); i++ ) contrib.push_back(false);
     }
 
-    //compute the density of each component of inp individually
-    CompFunction<D> component_density(1, inp.Ncomp());
-    component_density.func_ptr->data = inp.func_ptr->data; 
-    // component_density.alloc(inp.Ncomp(), true);
-    copy_grid(component_density, inp);
-    multiply(prec, component_density, 1.0, inp, inp, -1, false, false, true);
+    //compute the density of each component of bra individually (assumes bra and ket share similar data)
+    CompFunction<D> component_density(1, bra.Ncomp());
+    component_density.func_ptr->data = bra.func_ptr->data; 
+    // component_density.alloc(bra.Ncomp(), true);
+    copy_grid(component_density, bra);
+    multiply(prec, component_density, 1.0, bra, ket, -1, false, false, true);
     
     //collect each component's density into a temporary density, which could be defined complex for the purpose of conversion.
     CompFunction<3> rho_tmp(1, 1); //one component CompFunction
     //define rho_tmp as same number field as input for allocation
-    if (inp.isreal()) {
+    if (bra.isreal() and ket.isreal()) {
         rho_tmp.defreal();
         rho_tmp.func_ptr->data.iscomplex = 0;
     }
-    if (inp.iscomplex()) {
+    if (bra.iscomplex() or ket.iscomplex()) {
         rho_tmp.defcomplex();
         rho_tmp.func_ptr->data.isreal = 0;
     }
     if (rho_tmp.isreal() and rho_tmp.iscomplex()) MSG_ABORT("INPUT IS BOTH REAL AND COMPLEX; ERROR");
+    if (not (rho_tmp.isreal() or rho_tmp.iscomplex())) MSG_ABORT("INPUT IS NEITHER REAL NOR COMPLEX; ERROR");
     rho_tmp.alloc(1, true);
-    for (int i = 0; i < inp.Ncomp(); i++) {
-        if (inp.isreal() and std::abs(component_density.func_ptr->data.c1[i].imag())<MachinePrec){
+    for (int i = 0; i < bra.Ncomp(); i++) {
+        if (bra.isreal() and std::abs(component_density.func_ptr->data.c1[i].imag())<MachinePrec){
             if (contrib[i]) rho_tmp.CompD[0]->add_inplace((component_density.func_ptr->data.c1[i]).real(), *component_density.CompD[i]);
         } else {
             if (contrib[i]) {
-                if (inp.isreal()) {
-                    //this loop will at most run once per call, because we change inp.isreal()==true to ==false
-                    for (int comp=0; comp < inp.Ncomp(); comp++){
+                if (bra.isreal()) {
+                    //this loop will at most run once per call, because we change bra.isreal()==true to ==false
+                    for (int comp=0; comp < bra.Ncomp(); comp++){
                         rho_tmp.CompC[comp] = rho_tmp.CompD[comp]->CopyTreeToComplex();
                         delete rho_tmp.CompD[comp];
                         rho_tmp.CompD[comp] = nullptr; 
@@ -855,6 +856,18 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, d
         delete rho_tmp.CompD[0];
         rho_tmp.CompD[0] = nullptr;
     }
+}
+
+/** @brief out = conj(inp) * inp, overload for backwards compatibility
+ * 
+ *  @param contrib: 4-vector of boolean selecting which components contribute to the density. By default a 4-vector of true.
+ * 
+ *  Note that output is always real
+ * 
+ * 
+ */
+template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &inp, double prec, std::vector<bool> contrib) {
+    make_density(out, inp, inp,  prec, contrib);
 }
 
 
@@ -3562,6 +3575,7 @@ template <int D> void orthogonalize(double prec, CompFunction<D> &Bra, CompFunct
 //     }
 // }
 
+template void make_density(CompFunction<3> &out, CompFunction<3> &bra, CompFunction<3> &ket, double prec,  std::vector<bool> contrib = std::vector<bool>(4, true));
 template void make_density(CompFunction<3> &out, CompFunction<3> &inp, double prec,  std::vector<bool> contrib = std::vector<bool>(4, true));
 template ComplexDouble dot(const CompFunction<3> &bra, const CompFunction<3> &ket);
 template void project(CompFunction<3> &out, RepresentableFunction<3, double> &f, double prec, int comp = 0);
