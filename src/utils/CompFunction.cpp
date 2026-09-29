@@ -798,8 +798,12 @@ template <int D> void linear_combination(CompFunction<D> &out, const std::vector
 template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &bra,  CompFunction<D> &ket, double prec, std::vector<bool> contrib) {
     //provision in case inadequate contribution vector is provided, we just pad it with false
     if (contrib.size() < bra.Ncomp()) {
-        MSG_WARN("Contribution vector is smaller than input's number of component, excess components will not contribute");
+        MSG_WARN("Contribution vector is smaller than bra's number of component, excess components will not contribute");
         for (int i = contrib.size(); i < bra.Ncomp(); i++ ) contrib.push_back(false);
+    }
+    if (contrib.size() < ket.Ncomp()) {
+        MSG_WARN("Contribution vector is smaller than ket's number of component, excess components will not contribute");
+        for (int i = contrib.size(); i < ket.Ncomp(); i++ ) contrib.push_back(false);
     }
 
     //compute the density of each component of bra individually (assumes bra and ket share similar data)
@@ -830,19 +834,22 @@ template <int D> void make_density(CompFunction<D> &out, CompFunction<D> &bra,  
             if (contrib[i]) {
                 if (bra.isreal()) {
                     //this loop will at most run once per call, because we change bra.isreal()==true to ==false
-                    for (int comp=0; comp < bra.Ncomp(); comp++){
-                        rho_tmp.CompC[comp] = rho_tmp.CompD[comp]->CopyTreeToComplex();
-                        delete rho_tmp.CompD[comp];
-                        rho_tmp.CompD[comp] = nullptr; 
-                    }
+                    rho_tmp.CompC[0] = rho_tmp.CompD[0]->CopyTreeToComplex();
+                    delete rho_tmp.CompD[0];
+                    rho_tmp.CompD[0] = nullptr; 
                     rho_tmp.defcomplex();
                 }
                 rho_tmp.CompC[0]->add_inplace(component_density.func_ptr->data.c1[i], *component_density.CompC[i]);
             }
         }
     }
+    if (out.Ncomp() == 0 || out.CompD[0] == nullptr) {
+        out.defreal();
+        out.alloc(1);
+    }
     //making sure that out is real and clear the rest
     if (rho_tmp.iscomplex()) {
+
         // copy onto out's real component
         auto *realPart = rho_tmp.CompC[0]->Real(); //due to Real() returning a raw pointer, we have to create a temp variable to avoid a memory leak
         realPart->deep_copy(out.CompD[0]);
